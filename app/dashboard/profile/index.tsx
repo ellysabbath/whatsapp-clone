@@ -244,9 +244,9 @@ export default function ProfileSetupScreen() {
           <Text style={styles.headerTitle}>Profile</Text>
           <TouchableOpacity onPress={() => saveProfile(true)} style={styles.saveButton} disabled={isLoading}>
             {isLoading ? (
-              <ActivityIndicator size="small" color="#25D366" />
+              <ActivityIndicator size="small" color="#000" />
             ) : (
-              <Ionicons name="checkmark" size={24} color="#25D366" />
+              <Ionicons name="checkmark" size={24} color="#000" />
             )}
           </TouchableOpacity>
         </View>
@@ -410,7 +410,7 @@ export default function ProfileSetupScreen() {
       {/* Loading Overlay */}
       {isLoading && !isInitialLoad && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#25D366" />
+          <ActivityIndicator size="large" color="#043014" />
           <Text style={styles.loadingOverlayText}>Saving...</Text>
         </View>
       )}
@@ -442,7 +442,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingTop: Platform.OS === 'ios' ? 60 : 66,
     paddingHorizontal: 16,
     paddingBottom: 16,
     backgroundColor: '#fff',
@@ -478,7 +478,7 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#25D366',
+    backgroundColor: '#021409',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -486,7 +486,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     right: 0,
-    backgroundColor: '#075E54',
+    backgroundColor: '#041D1A',
     width: 30,
     height: 30,
     borderRadius: 15,
@@ -507,7 +507,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#075E54',
+    color: '#051514',
     marginBottom: 12,
   },
   fieldCard: {
@@ -555,7 +555,7 @@ const styles = StyleSheet.create({
     color: '#000',
     paddingVertical: 4,
     borderBottomWidth: 1,
-    borderBottomColor: '#25D366',
+    borderBottomColor: '#0C2515',
   },
   emptyValue: {
     color: '#999',
@@ -633,7 +633,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   nextButton: {
-    backgroundColor: '#25D366',
+    backgroundColor: '#051109',
     marginHorizontal: 16,
     paddingVertical: 16,
     borderRadius: 12,

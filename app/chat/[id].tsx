@@ -1,7 +1,10 @@
-import { View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, Image, KeyboardAvoidingView, Platform, StatusBar, Alert, Modal, ActivityIndicator, Animated, Keyboard, TouchableWithoutFeedback } from 'react-native';
+import { View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, Image, KeyboardAvoidingView, Platform, StatusBar, Alert, Modal, Animated, Keyboard, TouchableWithoutFeedback, Dimensions } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState, useRef, useEffect } from 'react';
 import { Ionicons } from '@expo/vector-icons';
+import { PanGestureHandler, GestureHandlerRootView, State } from 'react-native-gesture-handler';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Common emojis for quick picker
 const commonEmojis = [
@@ -67,6 +70,7 @@ export default function ChatDetailScreen() {
   const [isTyping, setIsTyping] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [activeTab, setActiveTab] = useState('chats');
   const flatListRef = useRef<FlatList>(null);
   
   // Animation values for dropdown
@@ -227,6 +231,51 @@ export default function ChatDetailScreen() {
     }, 300);
   };
 
+  const handleTabPress = (tab: string) => {
+    setActiveTab(tab);
+    switch(tab) {
+      case 'chats':
+        router.back();
+        break;
+      case 'updates':
+        router.push('/dashboard/updates');
+        break;
+      case 'profile':
+        router.push('/dashboard/profile');
+        break;
+      case 'newBroadcast':
+        router.push('/dashboard/broadcast');
+        break;
+      default:
+        break;
+    }
+  };
+
+  const onSwipeLeft = () => {
+    handleTabPress('updates');
+  };
+
+  const onSwipeRight = () => {
+    router.back();
+  };
+
+  const onGestureEvent = Animated.event(
+    [],
+    { useNativeDriver: false }
+  );
+
+  const onHandlerStateChange = (event: any) => {
+    if (event.nativeEvent.state === State.END) {
+      const { translationX, velocityX } = event.nativeEvent;
+      if (translationX < -50 || velocityX < -500) {
+        onSwipeLeft();
+      }
+      else if (translationX > 50 || velocityX > 500) {
+        onSwipeRight();
+      }
+    }
+  };
+
   const renderMessage = ({ item }: any) => {
     const isMe = item.sender === 'me';
     
@@ -262,229 +311,290 @@ export default function ChatDetailScreen() {
   );
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor="#075E54" />
-        
-        {/* Header with extra top padding */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#089629" />
-          </TouchableOpacity>
+    <GestureHandlerRootView style={styles.gestureContainer}>
+      <PanGestureHandler
+        onGestureEvent={onGestureEvent}
+        onHandlerStateChange={onHandlerStateChange}
+        activeOffsetX={[-10, 10]}
+        failOffsetY={[-5, 5]}
+      >
+        <View style={styles.container}>
+          <StatusBar barStyle="light-content" backgroundColor="#075E54" />
           
-          <TouchableOpacity style={styles.headerInfo} onPress={() => Alert.alert('Contact Info', chat.name)}>
-            <Image source={{ uri: chat.avatar }} style={styles.headerAvatar} />
-            <View style={styles.headerTextContainer}>
-              <Text style={styles.headerName}>{chat.name}</Text>
-              <Text style={styles.headerStatus}>
-                {chat.online ? 'Online' : chat.lastSeen}
-              </Text>
-              {isTyping && <Text style={styles.typingStatus}>typing...</Text>}
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color="#000000" />
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.headerInfo} onPress={() => Alert.alert('Contact Info', chat.name)}>
+              <Image source={{ uri: chat.avatar }} style={styles.headerAvatar} />
+              <View style={styles.headerTextContainer}>
+                <Text style={styles.headerName}>{chat.name}</Text>
+                <Text style={styles.headerStatus}>
+                  {chat.online ? 'Online' : chat.lastSeen}
+                </Text>
+                {isTyping && <Text style={styles.typingStatus}>typing...</Text>}
+              </View>
+            </TouchableOpacity>
+            
+            <View style={styles.headerActions}>
+              <TouchableOpacity style={styles.headerIcon} onPress={handleVideoCall}>
+                <Ionicons name="videocam" size={22} color="#000000" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.headerIcon} onPress={handleCall}>
+                <Ionicons name="call" size={20} color="#000000" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.headerIcon} onPress={openMenu}>
+                <Ionicons name="ellipsis-vertical" size={20} color="#000000" />
+              </TouchableOpacity>
             </View>
-          </TouchableOpacity>
-          
-          <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.headerIcon} onPress={handleVideoCall}>
-              <Ionicons name="videocam" size={22} color="#069308" />
+          </View>
+
+          {/* Dropdown Menu */}
+          <Modal
+            transparent={true}
+            visible={menuVisible}
+            animationType="none"
+            onRequestClose={closeMenu}
+          >
+            <TouchableOpacity 
+              style={styles.modalOverlay} 
+              activeOpacity={1} 
+              onPress={closeMenu}
+            >
+              <Animated.View 
+                style={[
+                  styles.dropdownMenu,
+                  {
+                    transform: [{ translateY: slideAnim }],
+                    opacity: fadeAnim,
+                  }
+                ]}
+              >
+                <TouchableOpacity 
+                  style={styles.menuItem} 
+                  onPress={() => handleMenuItem('contact')}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="person-outline" size={22} color="#075E54" />
+                  <Text style={styles.menuItemText}>Contact info</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.menuItem} 
+                  onPress={() => handleMenuItem('media')}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="images-outline" size={22} color="#075E54" />
+                  <Text style={styles.menuItemText}>Media, links, and docs</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.menuItem} 
+                  onPress={() => handleMenuItem('search')}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="search-outline" size={22} color="#075E54" />
+                  <Text style={styles.menuItemText}>Search</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.menuItem} 
+                  onPress={() => handleMenuItem('mute')}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="notifications-off-outline" size={22} color="#075E54" />
+                  <Text style={styles.menuItemText}>Mute notifications</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.menuItem} 
+                  onPress={() => handleMenuItem('wallpaper')}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="image-outline" size={22} color="#075E54" />
+                  <Text style={styles.menuItemText}>Wallpaper</Text>
+                </TouchableOpacity>
+                
+                <View style={styles.menuDivider} />
+                
+                <TouchableOpacity 
+                  style={[styles.menuItem, styles.dangerMenuItem]} 
+                  onPress={() => handleMenuItem('clear')}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="trash-outline" size={22} color="#FF3B30" />
+                  <Text style={[styles.menuItemText, styles.dangerText]}>Clear chat</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[styles.menuItem, styles.dangerMenuItem]} 
+                  onPress={() => handleMenuItem('delete')}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="close-circle-outline" size={22} color="#FF3B30" />
+                  <Text style={[styles.menuItemText, styles.dangerText]}>Delete chat</Text>
+                </TouchableOpacity>
+              </Animated.View>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.headerIcon} onPress={handleCall}>
-              <Ionicons name="call" size={20} color="#069308" />
+          </Modal>
+
+          {/* Messages */}
+          <FlatList
+            ref={flatListRef}
+            data={messages}
+            keyExtractor={(item) => item.id}
+            renderItem={renderMessage}
+            contentContainerStyle={styles.messagesContainer}
+            showsVerticalScrollIndicator={false}
+            onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+          />
+
+          {/* Typing Indicator */}
+          {isTyping && (
+            <View style={styles.typingContainer}>
+              <View style={styles.typingBubble}>
+                <Text style={styles.typingText}>someone is typing</Text>
+                <View style={styles.typingDots}>
+                  <View style={styles.typingDot} />
+                  <View style={styles.typingDot} />
+                  <View style={styles.typingDot} />
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* Input Bar - Positioned above bottom tab */}
+          <View style={styles.inputWrapper}>
+            <KeyboardAvoidingView 
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+              style={styles.keyboardAvoidingView}
+            >
+              <View style={styles.inputContainer}>
+                <TouchableOpacity style={styles.attachButton}>
+                  <Ionicons name="add-circle" size={28} color="#000000" />
+                </TouchableOpacity>
+                
+                <TextInput
+                  style={styles.input}
+                  placeholder="Type a message..."
+                  placeholderTextColor="#999"
+                  value={message}
+                  onChangeText={setMessage}
+                  multiline
+                  maxLength={1000}
+                />
+                
+                <TouchableOpacity style={styles.emojiButton} onPress={handleEmojiPress}>
+                  <Ionicons name="happy-outline" size={24} color="#000000" />
+                </TouchableOpacity>
+                
+                {message.trim() ? (
+                  <TouchableOpacity style={styles.sendButton} onPress={sendMessage}>
+                    <Ionicons name="send" size={24} color="#000000" />
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity style={styles.micButton}>
+                    <Ionicons name="mic" size={24} color="#000000" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </KeyboardAvoidingView>
+          </View>
+
+          {/* Emoji Picker Modal */}
+          <Modal
+            visible={showEmojiPicker}
+            transparent={true}
+            animationType="slide"
+            onRequestClose={() => setShowEmojiPicker(false)}
+          >
+            <TouchableOpacity 
+              style={styles.emojiModalOverlay} 
+              activeOpacity={1} 
+              onPress={() => setShowEmojiPicker(false)}
+            >
+              <View style={styles.emojiPickerContainer}>
+                <View style={styles.emojiHeader}>
+                  <Text style={styles.emojiTitle}>Choose an emoji</Text>
+                  <TouchableOpacity onPress={() => setShowEmojiPicker(false)}>
+                    <Ionicons name="close" size={24} color="#075E54" />
+                  </TouchableOpacity>
+                </View>
+                <FlatList
+                  data={commonEmojis}
+                  renderItem={renderEmojiItem}
+                  keyExtractor={(item, index) => index.toString()}
+                  numColumns={8}
+                  contentContainerStyle={styles.emojiList}
+                  showsVerticalScrollIndicator={false}
+                />
+              </View>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.headerIcon} onPress={openMenu}>
-              <Ionicons name="ellipsis-vertical" size={20} color="#069308" />
+          </Modal>
+
+          {/* Bottom Tab Navigation - All icons black */}
+          <View style={styles.bottomTab}>
+            <TouchableOpacity
+              style={styles.tabItem}
+              onPress={() => handleTabPress('chats')}
+            >
+              <Ionicons
+                name="chatbubbles-outline"
+                size={24}
+                color="#000000"
+              />
+              <Text style={styles.tabLabel}>Chats</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.tabItem}
+              onPress={() => handleTabPress('updates')}
+            >
+              <Ionicons
+                name="time-outline"
+                size={24}
+                color="#000000"
+              />
+              <Text style={styles.tabLabel}>Updates</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.tabItem}
+              onPress={() => handleTabPress('profile')}
+            >
+              <Ionicons
+                name="person-outline"
+                size={24}
+                color="#000000"
+              />
+              <Text style={styles.tabLabel}>Profile</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.tabItem}
+              onPress={() => handleTabPress('newBroadcast')}
+            >
+              <Ionicons
+                name="megaphone-outline"
+                size={24}
+                color="#000000"
+              />
+              <Text style={styles.tabLabel}>Broadcast</Text>
             </TouchableOpacity>
           </View>
         </View>
-
-        {/* WhatsApp Style Dropdown Menu */}
-        <Modal
-          transparent={true}
-          visible={menuVisible}
-          animationType="none"
-          onRequestClose={closeMenu}
-        >
-          <TouchableOpacity 
-            style={styles.modalOverlay} 
-            activeOpacity={1} 
-            onPress={closeMenu}
-          >
-            <Animated.View 
-              style={[
-                styles.dropdownMenu,
-                {
-                  transform: [{ translateY: slideAnim }],
-                  opacity: fadeAnim,
-                }
-              ]}
-            >
-              <TouchableOpacity 
-                style={styles.menuItem} 
-                onPress={() => handleMenuItem('contact')}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="person-outline" size={22} color="#075E54" />
-                <Text style={styles.menuItemText}>Contact info</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.menuItem} 
-                onPress={() => handleMenuItem('media')}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="images-outline" size={22} color="#075E54" />
-                <Text style={styles.menuItemText}>Media, links, and docs</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.menuItem} 
-                onPress={() => handleMenuItem('search')}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="search-outline" size={22} color="#075E54" />
-                <Text style={styles.menuItemText}>Search</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.menuItem} 
-                onPress={() => handleMenuItem('mute')}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="notifications-off-outline" size={22} color="#075E54" />
-                <Text style={styles.menuItemText}>Mute notifications</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.menuItem} 
-                onPress={() => handleMenuItem('wallpaper')}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="image-outline" size={22} color="#075E54" />
-                <Text style={styles.menuItemText}>Wallpaper</Text>
-              </TouchableOpacity>
-              
-              <View style={styles.menuDivider} />
-              
-              <TouchableOpacity 
-                style={[styles.menuItem, styles.dangerMenuItem]} 
-                onPress={() => handleMenuItem('clear')}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="trash-outline" size={22} color="#FF3B30" />
-                <Text style={[styles.menuItemText, styles.dangerText]}>Clear chat</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={[styles.menuItem, styles.dangerMenuItem]} 
-                onPress={() => handleMenuItem('delete')}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="close-circle-outline" size={22} color="#FF3B30" />
-                <Text style={[styles.menuItemText, styles.dangerText]}>Delete chat</Text>
-              </TouchableOpacity>
-            </Animated.View>
-          </TouchableOpacity>
-        </Modal>
-
-        {/* Messages with extra bottom padding */}
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          keyExtractor={(item) => item.id}
-          renderItem={renderMessage}
-          contentContainerStyle={styles.messagesContainer}
-          showsVerticalScrollIndicator={false}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-        />
-
-        {/* Typing Indicator */}
-        {isTyping && (
-          <View style={styles.typingContainer}>
-            <View style={styles.typingBubble}>
-              <Text style={styles.typingText}>someone is typing</Text>
-              <View style={styles.typingDots}>
-                <View style={styles.typingDot} />
-                <View style={styles.typingDot} />
-                <View style={styles.typingDot} />
-              </View>
-            </View>
-          </View>
-        )}
-
-        {/* Input Bar with extra bottom padding for keyboard */}
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-          style={styles.keyboardAvoidingView}
-        >
-          <View style={styles.inputContainer}>
-            <TouchableOpacity style={styles.attachButton}>
-              <Ionicons name="add-circle" size={28} color="#075E54" />
-            </TouchableOpacity>
-            
-            <TextInput
-              style={styles.input}
-              placeholder="Type a message..."
-              placeholderTextColor="#999"
-              value={message}
-              onChangeText={setMessage}
-              multiline
-              maxLength={1000}
-            />
-            
-            <TouchableOpacity style={styles.emojiButton} onPress={handleEmojiPress}>
-              <Ionicons name="happy-outline" size={24} color="#666" />
-            </TouchableOpacity>
-            
-            {message.trim() ? (
-              <TouchableOpacity style={styles.sendButton} onPress={sendMessage}>
-                <Ionicons name="send" size={24} color="#25D366" />
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity style={styles.micButton}>
-                <Ionicons name="mic" size={24} color="#666" />
-              </TouchableOpacity>
-            )}
-          </View>
-          {/* Extra bottom padding space */}
-          <View style={styles.bottomPadding} />
-        </KeyboardAvoidingView>
-
-        {/* Custom Emoji Picker Modal */}
-        <Modal
-          visible={showEmojiPicker}
-          transparent={true}
-          animationType="slide"
-          onRequestClose={() => setShowEmojiPicker(false)}
-        >
-          <TouchableOpacity 
-            style={styles.emojiModalOverlay} 
-            activeOpacity={1} 
-            onPress={() => setShowEmojiPicker(false)}
-          >
-            <View style={styles.emojiPickerContainer}>
-              <View style={styles.emojiHeader}>
-                <Text style={styles.emojiTitle}>Choose an emoji</Text>
-                <TouchableOpacity onPress={() => setShowEmojiPicker(false)}>
-                  <Ionicons name="close" size={24} color="#075E54" />
-                </TouchableOpacity>
-              </View>
-              <FlatList
-                data={commonEmojis}
-                renderItem={renderEmojiItem}
-                keyExtractor={(item, index) => index.toString()}
-                numColumns={8}
-                contentContainerStyle={styles.emojiList}
-                showsVerticalScrollIndicator={false}
-              />
-            </View>
-          </TouchableOpacity>
-        </Modal>
-      </View>
-    </TouchableWithoutFeedback>
+      </PanGestureHandler>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
+  gestureContainer: {
+    flex: 1,
+  },
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
@@ -495,7 +605,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    paddingTop: Platform.OS === 'ios' ? 50 : 60,
+    paddingTop: Platform.OS === 'ios' ? 50 : StatusBar.currentHeight ? StatusBar.currentHeight + 15 : 80,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#e0e0e0',
   },
   backButton: {
     padding: 4,
@@ -518,15 +630,15 @@ const styles = StyleSheet.create({
   headerName: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#319708',
+    color: '#000000',
   },
   headerStatus: {
     fontSize: 12,
-    color: '#2B8108',
+    color: '#666666',
   },
   typingStatus: {
     fontSize: 12,
-    color: '#088E0F',
+    color: '#25D366',
     fontStyle: 'italic',
   },
   headerActions: {
@@ -542,7 +654,7 @@ const styles = StyleSheet.create({
   },
   dropdownMenu: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 110 : 80,
+    top: Platform.OS === 'ios' ? 110 : (StatusBar.currentHeight || 0) + 70,
     right: 12,
     backgroundColor: '#fff',
     borderRadius: 12,
@@ -580,7 +692,6 @@ const styles = StyleSheet.create({
   messagesContainer: {
     padding: 16,
     paddingBottom: 20,
-    paddingTop: 10,
   },
   messageRow: {
     marginBottom: 12,
@@ -608,12 +719,13 @@ const styles = StyleSheet.create({
   messageText: {
     fontSize: 15,
     lineHeight: 20,
+    color: '#000000',
   },
   myText: {
-    color: '#000',
+    color: '#000000',
   },
   theirText: {
-    color: '#000',
+    color: '#000000',
   },
   messageFooter: {
     flexDirection: 'row',
@@ -655,6 +767,11 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: '#666',
   },
+  inputWrapper: {
+    backgroundColor: '#fff',
+    borderTopWidth: 0.5,
+    borderTopColor: '#e0e0e0',
+  },
   keyboardAvoidingView: {
     backgroundColor: '#fff',
   },
@@ -663,13 +780,7 @@ const styles = StyleSheet.create({
     padding: 10,
     backgroundColor: '#fff',
     alignItems: 'center',
-    borderTopWidth: 0.5,
-    borderTopColor: '#e0e0e0',
     gap: 8,
-  },
-  bottomPadding: {
-    height: Platform.OS === 'ios' ? 34 : 50, // Extra bottom padding for safe area
-    backgroundColor: '#fff',
   },
   attachButton: {
     padding: 4,
@@ -684,6 +795,7 @@ const styles = StyleSheet.create({
     maxHeight: 100,
     fontSize: 16,
     backgroundColor: '#fff',
+    color: '#000000',
   },
   emojiButton: {
     padding: 4,
@@ -731,5 +843,23 @@ const styles = StyleSheet.create({
   },
   emojiText: {
     fontSize: 32,
+  },
+  bottomTab: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderTopWidth: 0.5,
+    borderTopColor: '#e0e0e0',
+    paddingVertical: 8,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 76,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  tabLabel: {
+    fontSize: 12,
+    color: '#000000',
   },
 });

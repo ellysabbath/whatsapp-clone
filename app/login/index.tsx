@@ -1,5 +1,5 @@
-import { View, Text, TextInput, TouchableOpacity, Platform, StyleSheet, Alert, Modal, FlatList } from 'react-native';
-import { useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, Platform, StyleSheet, Alert, Modal, FlatList, KeyboardAvoidingView, ScrollView, Keyboard } from 'react-native';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -36,7 +36,22 @@ export default function LoginScreen() {
   const [selectedCountry, setSelectedCountry] = useState(countries[0]);
   const [modalVisible, setModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => {
+      setKeyboardVisible(true);
+    });
+    const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardVisible(false);
+    });
+
+    return () => {
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
+    };
+  }, []);
 
   const filteredCountries = countries.filter(country =>
     country.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -48,11 +63,11 @@ export default function LoginScreen() {
       Alert.alert('Error', 'Please enter your phone number');
       return;
     }
-    router.replace('/(tabs)/chats');
+    router.replace('/dashboard');
   };
 
   const handleCreateAccount = () => {
-    router.push('/profile-setup');
+    router.push('/register');
   };
 
   const selectCountry = (country: typeof countries[0]) => {
@@ -62,53 +77,64 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView 
+      style={styles.container} 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+    >
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#075E54" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Enter Phone Number</Text>
+        
+        <Text style={styles.headerTitle}>ApTec</Text>
+        <View style={styles.headerRight} />
       </View>
 
-      <View style={styles.content}>
-        <Ionicons name="logo-whatsapp" size={80} color="#25D366" />
-        <Text style={styles.title}>Welcome to WhatsApp Clone</Text>
-        <Text style={styles.subtitle}>Please enter your phone number to continue</Text>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.content}>
+          <View style={styles.logoContainer}>
+            <Ionicons name="logo-whatsapp" size={80} color="#000000" />
+          </View>
+          <Text style={styles.title}>Welcome to ApTec</Text>
+          <Text style={styles.subtitle}>Please enter your phone number to continue</Text>
 
-        <View style={styles.inputContainer}>
-          <TouchableOpacity style={styles.countrySelector} onPress={() => setModalVisible(true)}>
-            <Text style={styles.countryFlag}>{selectedCountry.flag}</Text>
-            <Text style={styles.countryCode}>{selectedCountry.dialCode}</Text>
-            <Ionicons name="chevron-down" size={16} color="#666" />
+          <View style={styles.inputContainer}>
+            <TouchableOpacity style={styles.countrySelector} onPress={() => setModalVisible(true)}>
+              <Text style={styles.countryFlag}>{selectedCountry.flag}</Text>
+              <Text style={styles.countryCode}>{selectedCountry.dialCode}</Text>
+              <Ionicons name="chevron-down" size={16} color="#000000" />
+            </TouchableOpacity>
+            <TextInput
+              style={styles.phoneInput}
+              placeholder="Phone number"
+              placeholderTextColor="#999"
+              value={phoneNumber}
+              onChangeText={setPhoneNumber}
+              keyboardType="phone-pad"
+            />
+          </View>
+
+          <TouchableOpacity style={styles.button} onPress={handleLogin}>
+            <Text style={styles.buttonText}>Continue</Text>
+            <Ionicons name="arrow-forward" size={20} color="#000000" />
           </TouchableOpacity>
-          <TextInput
-            style={styles.phoneInput}
-            placeholder="Phone number"
-            placeholderTextColor="#999"
-            value={phoneNumber}
-            onChangeText={setPhoneNumber}
-            keyboardType="phone-pad"
-          />
+
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <TouchableOpacity style={styles.createAccountButton} onPress={handleCreateAccount}>
+            <Ionicons name="person-add-outline" size={20} color="#000000" />
+            <Text style={styles.createAccountText}>Create new account</Text>
+          </TouchableOpacity>
+
+          <Text style={styles.terms}>Your phone number will be used for account verification</Text>
         </View>
-
-        <TouchableOpacity style={styles.button} onPress={handleLogin}>
-          <Text style={styles.buttonText}>Continue</Text>
-          <Ionicons name="arrow-forward" size={20} color="#fff" />
-        </TouchableOpacity>
-
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>or</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        <TouchableOpacity style={styles.createAccountButton} onPress={handleCreateAccount}>
-          <Ionicons name="person-add-outline" size={20} color="#075E54" />
-          <Text style={styles.createAccountText}>Create new account</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.terms}>Your phone number will be used for account verification</Text>
-      </View>
+      </ScrollView>
 
       <Modal animationType="slide" transparent={true} visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalOverlay}>
@@ -116,12 +142,12 @@ export default function LoginScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select Country</Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Ionicons name="close" size={24} color="#075E54" />
+                <Ionicons name="close" size={24} color="#000000" />
               </TouchableOpacity>
             </View>
             
             <View style={styles.searchContainer}>
-              <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
+              <Ionicons name="search" size={20} color="#000000" style={styles.searchIcon} />
               <TextInput
                 style={styles.searchInput}
                 placeholder="Search country or code..."
@@ -131,7 +157,7 @@ export default function LoginScreen() {
               />
               {searchQuery !== '' && (
                 <TouchableOpacity onPress={() => setSearchQuery('')}>
-                  <Ionicons name="close-circle" size={20} color="#999" />
+                  <Ionicons name="close-circle" size={20} color="#000000" />
                 </TouchableOpacity>
               )}
             </View>
@@ -147,7 +173,7 @@ export default function LoginScreen() {
                     <Text style={styles.countryDialCode}>{item.dialCode}</Text>
                   </View>
                   {selectedCountry.dialCode === item.dialCode && selectedCountry.name === item.name && (
-                    <Ionicons name="checkmark-circle" size={24} color="#25D366" />
+                    <Ionicons name="checkmark-circle" size={24} color="#000000" />
                   )}
                 </TouchableOpacity>
               )}
@@ -156,34 +182,118 @@ export default function LoginScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 15, paddingTop: Platform.OS === 'ios' ? 50 : 15, borderBottomWidth: 0.5, borderBottomColor: '#e0e0e0' },
-  headerTitle: { fontSize: 18, fontWeight: '600', color: '#075E54', marginLeft: 15 },
-  content: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#075E54', marginTop: 20, marginBottom: 10 },
-  subtitle: { fontSize: 14, color: '#666', textAlign: 'center', marginBottom: 30 },
-  inputContainer: { flexDirection: 'row', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, marginBottom: 20, width: '100%' },
-  countrySelector: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, backgroundColor: '#f0f0f0', borderTopLeftRadius: 8, borderBottomLeftRadius: 8, gap: 5 },
-  countryFlag: { fontSize: 18 },
-  countryCode: { fontSize: 16, fontWeight: '500', color: '#333' },
-  phoneInput: { flex: 1, padding: 12, fontSize: 16, color: '#333' },
+  container: { 
+    flex: 1, 
+    backgroundColor: '#fff' 
+  },
+  header: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40, 
+    paddingBottom: 20,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  backButton: {
+    padding: 4,
+    width: 32,
+  },
+  headerTitle: { 
+    fontSize: 28, 
+    fontWeight: 'bold', 
+    color: '#000000',
+    textAlign: 'center',
+    letterSpacing: 1,
+  },
+  headerRight: {
+    width: 32,
+  },
+  scrollContent: { 
+    flexGrow: 1,
+    justifyContent: 'center',
+  },
+  content: { 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    padding: 20,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 30,
+  },
+  logoContainer: {
+    marginBottom: 20,
+  },
+  title: { 
+    fontSize: 28, 
+    fontWeight: 'bold', 
+    color: '#000000', 
+    marginTop: 10, 
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  subtitle: { 
+    fontSize: 15, 
+    color: '#666', 
+    textAlign: 'center', 
+    marginBottom: 30,
+    lineHeight: 22,
+  },
+  inputContainer: { 
+    flexDirection: 'row', 
+    borderWidth: 1.5, 
+    borderColor: '#e0e0e0', 
+    borderRadius: 12, 
+    marginBottom: 20, 
+    width: '100%',
+    backgroundColor: '#fff',
+    overflow: 'hidden',
+  },
+  countrySelector: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: 15, 
+    backgroundColor: '#f8f9fa', 
+    gap: 6,
+    borderRightWidth: 1,
+    borderRightColor: '#e0e0e0',
+  },
+  countryFlag: { fontSize: 20 },
+  countryCode: { fontSize: 16, fontWeight: '600', color: '#000000' },
+  phoneInput: { 
+    flex: 1, 
+    padding: 14, 
+    fontSize: 16, 
+    color: '#000000',
+    backgroundColor: '#fff',
+  },
   button: { 
-    backgroundColor: '#25D366', 
+    backgroundColor: '#E8E8E8', 
     paddingHorizontal: 30, 
-    paddingVertical: 12, 
-    borderRadius: 25, 
+    paddingVertical: 14, 
+    borderRadius: 30, 
     width: '100%', 
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 8
+    gap: 8,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  buttonText: { fontSize: 16, fontWeight: 'bold', color: '#fff' },
+  buttonText: { 
+    fontSize: 16, 
+    fontWeight: 'bold', 
+    color: '#000000' 
+  },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -197,7 +307,7 @@ const styles = StyleSheet.create({
   },
   dividerText: {
     marginHorizontal: 15,
-    color: '#999',
+    color: '#000000',
     fontSize: 14,
   },
   createAccountButton: {
@@ -207,27 +317,89 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 12,
     paddingHorizontal: 20,
-    borderRadius: 25,
-    borderWidth: 1,
-    borderColor: '#075E54',
+    borderRadius: 30,
+    borderWidth: 1.5,
+    borderColor: '#000000',
     width: '100%',
+    marginBottom: 20,
+    backgroundColor: '#fff',
   },
   createAccountText: {
     fontSize: 16,
-    fontWeight: '500',
-    color: '#075E54',
+    fontWeight: '600',
+    color: '#000000',
   },
-  terms: { fontSize: 12, color: '#999', textAlign: 'center', marginTop: 20 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' },
-  modalContainer: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '80%' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 0.5, borderBottomColor: '#e0e0e0' },
-  modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#075E54' },
-  searchContainer: { flexDirection: 'row', alignItems: 'center', margin: 15, paddingHorizontal: 15, backgroundColor: '#f0f0f0', borderRadius: 10 },
-  searchIcon: { marginRight: 10 },
-  searchInput: { flex: 1, paddingVertical: 12, fontSize: 16 },
-  countryItem: { flexDirection: 'row', alignItems: 'center', padding: 15, borderBottomWidth: 0.5, borderBottomColor: '#f0f0f0' },
-  countryFlagLarge: { fontSize: 30, marginRight: 15 },
-  countryInfo: { flex: 1 },
-  countryName: { fontSize: 16, fontWeight: '500', color: '#333' },
-  countryDialCode: { fontSize: 13, color: '#999', marginTop: 2 },
+  terms: { 
+    fontSize: 12, 
+    color: '#666', 
+    textAlign: 'center', 
+    marginTop: 10,
+    marginBottom: Platform.OS === 'ios' ? 10 : 20,
+    lineHeight: 18,
+  },
+  modalOverlay: { 
+    flex: 1, 
+    backgroundColor: 'rgba(0, 0, 0, 0.5)', 
+    justifyContent: 'flex-end' 
+  },
+  modalContainer: { 
+    backgroundColor: '#fff', 
+    borderTopLeftRadius: 24, 
+    borderTopRightRadius: 24, 
+    maxHeight: '80%' 
+  },
+  modalHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    padding: 20, 
+    borderBottomWidth: 0.5, 
+    borderBottomColor: '#e0e0e0' 
+  },
+  modalTitle: { 
+    fontSize: 20, 
+    fontWeight: 'bold', 
+    color: '#000000' 
+  },
+  searchContainer: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    margin: 15, 
+    paddingHorizontal: 15, 
+    backgroundColor: '#f0f0f0', 
+    borderRadius: 12 
+  },
+  searchIcon: { 
+    marginRight: 10 
+  },
+  searchInput: { 
+    flex: 1, 
+    paddingVertical: 12, 
+    fontSize: 16,
+    color: '#000000'
+  },
+  countryItem: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    padding: 15, 
+    borderBottomWidth: 0.5, 
+    borderBottomColor: '#f0f0f0' 
+  },
+  countryFlagLarge: { 
+    fontSize: 32, 
+    marginRight: 15 
+  },
+  countryInfo: { 
+    flex: 1 
+  },
+  countryName: { 
+    fontSize: 16, 
+    fontWeight: '500', 
+    color: '#000000' 
+  },
+  countryDialCode: { 
+    fontSize: 13, 
+    color: '#666', 
+    marginTop: 2 
+  },
 });

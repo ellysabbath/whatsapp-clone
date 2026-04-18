@@ -116,11 +116,11 @@ export default function CreateFormScreen() {
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+          <Ionicons name="arrow-back" size={24} color="rgb(15, 15, 12)" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Create New Form</Text>
         <TouchableOpacity onPress={saveForm} style={styles.saveButton}>
-          <Ionicons name="checkmark" size={24} color="#fff" />
+          <Ionicons name="checkmark" size={24} color="rgb(17, 2, 2)" />
         </TouchableOpacity>
       </View>
 
@@ -280,12 +280,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
   },
   header: {
-    backgroundColor: '#075E54',
+    backgroundColor: '#E1E6E5',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
+    paddingTop: Platform.OS === 'ios' ? 50 : 76,
     paddingBottom: 12,
   },
   backButton: {
@@ -294,7 +294,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#01010A',
   },
   saveButton: {
     padding: 4,

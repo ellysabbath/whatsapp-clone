@@ -284,11 +284,11 @@ export default function ContactScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#059814" />
+          <Ionicons name="arrow-back" size={24} color="#0B150D" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Select Contact</Text>
         <TouchableOpacity onPress={handleInviteFriend} style={styles.inviteButton}>
-          <Ionicons name="person-add-outline" size={24} color="#059814" />
+          <Ionicons name="person-add-outline" size={24} color="#09110A" />
         </TouchableOpacity>
       </View>
 
@@ -396,7 +396,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 50 : 16,
+    paddingTop: Platform.OS === 'ios' ? 50 : 66,
     paddingBottom: 12,
   },
   backButton: {
@@ -405,7 +405,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#079640',
+    color: '#061C0F',
   },
   inviteButton: {
     padding: 4,

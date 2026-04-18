@@ -95,7 +95,7 @@ export default function LoginScreen() {
       >
         <View style={styles.content}>
           <View style={styles.logoContainer}>
-            <Ionicons name="logo-whatsapp" size={80} color="#25D366" />
+            <Ionicons name="logo-whatsapp" size={80} color="#000000" />
           </View>
           <Text style={styles.title}>Welcome to ApTec</Text>
           <Text style={styles.subtitle}>Please enter your phone number to continue</Text>
@@ -104,7 +104,7 @@ export default function LoginScreen() {
             <TouchableOpacity style={styles.countrySelector} onPress={() => setModalVisible(true)}>
               <Text style={styles.countryFlag}>{selectedCountry.flag}</Text>
               <Text style={styles.countryCode}>{selectedCountry.dialCode}</Text>
-              <Ionicons name="chevron-down" size={16} color="#666" />
+              <Ionicons name="chevron-down" size={16} color="#000000" />
             </TouchableOpacity>
             <TextInput
               style={styles.phoneInput}
@@ -118,7 +118,7 @@ export default function LoginScreen() {
 
           <TouchableOpacity style={styles.button} onPress={handleLogin}>
             <Text style={styles.buttonText}>Continue</Text>
-            <Ionicons name="arrow-forward" size={20} color="#fff" />
+            <Ionicons name="arrow-forward" size={20} color="#000000" />
           </TouchableOpacity>
 
           <View style={styles.divider}>
@@ -128,7 +128,7 @@ export default function LoginScreen() {
           </View>
 
           <TouchableOpacity style={styles.createAccountButton} onPress={handleCreateAccount}>
-            <Ionicons name="person-add-outline" size={20} color="#075E54" />
+            <Ionicons name="person-add-outline" size={20} color="#000000" />
             <Text style={styles.createAccountText}>Create new account</Text>
           </TouchableOpacity>
 
@@ -142,12 +142,12 @@ export default function LoginScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select Country</Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Ionicons name="close" size={24} color="#075E54" />
+                <Ionicons name="close" size={24} color="#000000" />
               </TouchableOpacity>
             </View>
             
             <View style={styles.searchContainer}>
-              <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
+              <Ionicons name="search" size={20} color="#000000" style={styles.searchIcon} />
               <TextInput
                 style={styles.searchInput}
                 placeholder="Search country or code..."
@@ -157,7 +157,7 @@ export default function LoginScreen() {
               />
               {searchQuery !== '' && (
                 <TouchableOpacity onPress={() => setSearchQuery('')}>
-                  <Ionicons name="close-circle" size={20} color="#999" />
+                  <Ionicons name="close-circle" size={20} color="#000000" />
                 </TouchableOpacity>
               )}
             </View>
@@ -173,7 +173,7 @@ export default function LoginScreen() {
                     <Text style={styles.countryDialCode}>{item.dialCode}</Text>
                   </View>
                   {selectedCountry.dialCode === item.dialCode && selectedCountry.name === item.name && (
-                    <Ionicons name="checkmark-circle" size={24} color="#25D366" />
+                    <Ionicons name="checkmark-circle" size={24} color="#000000" />
                   )}
                 </TouchableOpacity>
               )}
@@ -196,7 +196,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', 
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 60 : 40, 
+    paddingTop: Platform.OS === 'ios' ? 60 : 60, 
     paddingBottom: 20,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
   headerTitle: { 
     fontSize: 28, 
     fontWeight: 'bold', 
-    color: '#0A9E45',
+    color: '#000000',
     textAlign: 'center',
     letterSpacing: 1,
   },
@@ -232,7 +232,7 @@ const styles = StyleSheet.create({
   title: { 
     fontSize: 28, 
     fontWeight: 'bold', 
-    color: '#0FA935', 
+    color: '#000000', 
     marginTop: 10, 
     marginBottom: 10,
     textAlign: 'center',
@@ -264,16 +264,16 @@ const styles = StyleSheet.create({
     borderRightColor: '#e0e0e0',
   },
   countryFlag: { fontSize: 20 },
-  countryCode: { fontSize: 16, fontWeight: '600', color: '#333' },
+  countryCode: { fontSize: 16, fontWeight: '600', color: '#000000' },
   phoneInput: { 
     flex: 1, 
     padding: 14, 
     fontSize: 16, 
-    color: '#333',
+    color: '#000000',
     backgroundColor: '#fff',
   },
   button: { 
-    backgroundColor: '#25D366', 
+    backgroundColor: '#E8E8E8', 
     paddingHorizontal: 30, 
     paddingVertical: 14, 
     borderRadius: 30, 
@@ -283,16 +283,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     marginBottom: 20,
-    shadowColor: '#25D366',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
   buttonText: { 
     fontSize: 16, 
     fontWeight: 'bold', 
-    color: '#fff' 
+    color: '#000000' 
   },
   divider: {
     flexDirection: 'row',
@@ -307,7 +307,7 @@ const styles = StyleSheet.create({
   },
   dividerText: {
     marginHorizontal: 15,
-    color: '#999',
+    color: '#000000',
     fontSize: 14,
   },
   createAccountButton: {
@@ -319,7 +319,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderRadius: 30,
     borderWidth: 1.5,
-    borderColor: '#0A8A21',
+    borderColor: '#000000',
     width: '100%',
     marginBottom: 20,
     backgroundColor: '#fff',
@@ -327,11 +327,11 @@ const styles = StyleSheet.create({
   createAccountText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#0D9A0A',
+    color: '#000000',
   },
   terms: { 
     fontSize: 12, 
-    color: '#999', 
+    color: '#666', 
     textAlign: 'center', 
     marginTop: 10,
     marginBottom: Platform.OS === 'ios' ? 10 : 20,
@@ -359,7 +359,7 @@ const styles = StyleSheet.create({
   modalTitle: { 
     fontSize: 20, 
     fontWeight: 'bold', 
-    color: '#075E54' 
+    color: '#000000' 
   },
   searchContainer: { 
     flexDirection: 'row', 
@@ -375,7 +375,8 @@ const styles = StyleSheet.create({
   searchInput: { 
     flex: 1, 
     paddingVertical: 12, 
-    fontSize: 16 
+    fontSize: 16,
+    color: '#000000'
   },
   countryItem: { 
     flexDirection: 'row', 
@@ -394,11 +395,11 @@ const styles = StyleSheet.create({
   countryName: { 
     fontSize: 16, 
     fontWeight: '500', 
-    color: '#333' 
+    color: '#000000' 
   },
   countryDialCode: { 
     fontSize: 13, 
-    color: '#999', 
+    color: '#666', 
     marginTop: 2 
   },
 });

@@ -1,8 +1,9 @@
 // app/(tabs)/updates.tsx
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, Platform, StatusBar, Alert, Modal, TextInput, ScrollView } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, Platform, StatusBar, Alert, Modal, TextInput, ScrollView, SafeAreaView } from 'react-native';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { PanGestureHandler, GestureHandlerRootView, State } from 'react-native-gesture-handler';
 
 // Mock data for status updates
 const myStatuses = [
@@ -111,6 +112,7 @@ const channels = [
 
 export default function UpdatesScreen() {
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState('updates');
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<any>(null);
   const [currentStatusIndex, setCurrentStatusIndex] = useState(0);
@@ -152,6 +154,47 @@ export default function UpdatesScreen() {
   const handlePreviousStatus = () => {
     if (currentStatusIndex > 0) {
       setCurrentStatusIndex(currentStatusIndex - 1);
+    }
+  };
+
+  const handleTabPress = (tab: string) => {
+    setActiveTab(tab);
+    switch(tab) {
+      case 'chats':
+        router.push('/dashboard/chats');
+        break;
+      case 'updates':
+        break;
+      case 'profile':
+        router.push('/dashboard/profile');
+        break;
+      case 'newBroadcast':
+        router.push('/dashboard/broadcast');
+        break;
+      default:
+        break;
+    }
+  };
+
+  const onSwipeLeft = () => {
+    handleTabPress('profile');
+  };
+
+  const onSwipeRight = () => {
+    handleTabPress('chats');
+  };
+
+  const onGestureEvent = (event: any) => {};
+  
+  const onHandlerStateChange = (event: any) => {
+    if (event.nativeEvent.state === State.END) {
+      const { translationX, velocityX } = event.nativeEvent;
+      if (translationX < -50 || velocityX < -500) {
+        onSwipeLeft();
+      }
+      else if (translationX > 50 || velocityX > 500) {
+        onSwipeRight();
+      }
     }
   };
 
@@ -203,268 +246,353 @@ export default function UpdatesScreen() {
   );
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#075E54" />
-      
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Updates</Text>
-        <View style={styles.headerIcons}>
-          <TouchableOpacity style={styles.headerIcon} onPress={() => Alert.alert('Search', 'Search updates')}>
-            <Ionicons name="search" size={22} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.headerIcon} onPress={() => Alert.alert('Menu', 'Updates menu')}>
-            <Ionicons name="ellipsis-vertical" size={20} color="#fff" />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* My Status Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>My status</Text>
-          <TouchableOpacity style={styles.myStatusCard} onPress={handleMyStatusPress}>
-            <View style={styles.myStatusAvatarContainer}>
-              <Image 
-                source={{ uri: 'https://randomuser.me/api/portraits/men/1.jpg' }} 
-                style={styles.myStatusAvatar}
-              />
-              <View style={styles.addStatusIcon}>
-                <Ionicons name="add" size={16} color="#fff" />
-              </View>
-            </View>
-            <View style={styles.myStatusText}>
-              <Text style={styles.myStatusTitle}>My status</Text>
-              <Text style={styles.myStatusSubtitle}>Tap to add status update</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-
-        {/* Recent Updates Section */}
-        {recentStatuses.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Recent updates</Text>
-            <FlatList
-              data={recentStatuses}
-              keyExtractor={(item) => item.id}
-              renderItem={renderStatusItem}
-              scrollEnabled={false}
-            />
-          </View>
-        )}
-
-        {/* Viewed Updates Section */}
-        {viewedStatuses.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Viewed updates</Text>
-            <FlatList
-              data={viewedStatuses}
-              keyExtractor={(item) => item.id}
-              renderItem={renderStatusItem}
-              scrollEnabled={false}
-            />
-          </View>
-        )}
-
-        {/* Channels Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Channels</Text>
-            <TouchableOpacity onPress={() => Alert.alert('Find Channels', 'Discover channels')}>
-              <Text style={styles.findChannelsText}>Find channels</Text>
-            </TouchableOpacity>
-          </View>
-          
-          <FlatList
-            data={channels}
-            keyExtractor={(item) => item.id}
-            renderItem={renderChannelItem}
-            scrollEnabled={false}
-          />
-          
-          <TouchableOpacity style={styles.exploreButton} onPress={() => Alert.alert('Explore', 'Explore more channels')}>
-            <Text style={styles.exploreButtonText}>Explore more</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Privacy Note */}
-        <View style={styles.privacyNote}>
-          <Ionicons name="lock-closed-outline" size={14} color="#999" />
-          <Text style={styles.privacyText}>
-            Your status updates are end-to-end encrypted
-          </Text>
-        </View>
-      </ScrollView>
-
-      {/* Status View Modal */}
-      <Modal
-        visible={showStatusModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowStatusModal(false)}
+    <GestureHandlerRootView style={styles.gestureContainer}>
+      <PanGestureHandler
+        onGestureEvent={onGestureEvent}
+        onHandlerStateChange={onHandlerStateChange}
+        activeOffsetX={[-10, 10]}
+        failOffsetY={[-5, 5]}
       >
-        {selectedStatus && selectedStatus.statuses && selectedStatus.statuses[currentStatusIndex] && (
-          <View style={styles.statusModalContainer}>
-            <TouchableOpacity style={styles.statusModalClose} onPress={() => setShowStatusModal(false)}>
-              <Ionicons name="close" size={24} color="#fff" />
-            </TouchableOpacity>
+        <SafeAreaView style={styles.safeArea}>
+          <View style={styles.container}>
+            <StatusBar barStyle="light-content" backgroundColor="#075E54" />
             
-            <View style={styles.statusHeader}>
-              <Image source={{ uri: selectedStatus.avatar }} style={styles.statusModalAvatar} />
-              <View>
-                <Text style={styles.statusModalName}>{selectedStatus.name}</Text>
-                <Text style={styles.statusModalTime}>
-                  {selectedStatus.statuses[currentStatusIndex].time}
-                </Text>
+            {/* Header with back arrow */}
+            <View style={styles.header}>
+              <View style={styles.headerLeft}>
+                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                  <Ionicons name="arrow-back" size={24} color="#000000" />
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>Updates</Text>
+              </View>
+              <View style={styles.headerIcons}>
+                <TouchableOpacity style={styles.headerIcon} onPress={() => Alert.alert('Search', 'Search updates')}>
+                  <Ionicons name="search" size={22} color="#000000" />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.headerIcon} onPress={() => Alert.alert('Menu', 'Updates menu')}>
+                  <Ionicons name="ellipsis-vertical" size={20} color="#000000" />
+                </TouchableOpacity>
               </View>
             </View>
 
-            <TouchableOpacity 
-              style={styles.statusModalContent}
-              onPress={handleNextStatus}
-              activeOpacity={1}
-            >
-              <Image 
-                source={{ uri: selectedStatus.statuses[currentStatusIndex].media }} 
-                style={styles.statusModalImage}
-                resizeMode="contain"
-              />
-              {selectedStatus.statuses[currentStatusIndex].caption && (
-                <View style={styles.statusCaption}>
-                  <Text style={styles.statusCaptionText}>
-                    {selectedStatus.statuses[currentStatusIndex].caption}
-                  </Text>
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
+              {/* My Status Section */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>My status</Text>
+                <TouchableOpacity style={styles.myStatusCard} onPress={handleMyStatusPress}>
+                  <View style={styles.myStatusAvatarContainer}>
+                    <Image 
+                      source={{ uri: 'https://randomuser.me/api/portraits/men/1.jpg' }} 
+                      style={styles.myStatusAvatar}
+                    />
+                    <View style={styles.addStatusIcon}>
+                      <Ionicons name="add" size={16} color="#fff" />
+                    </View>
+                  </View>
+                  <View style={styles.myStatusText}>
+                    <Text style={styles.myStatusTitle}>My status</Text>
+                    <Text style={styles.myStatusSubtitle}>Tap to add status update</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+
+              {/* Recent Updates Section */}
+              {recentStatuses.length > 0 && (
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Recent updates</Text>
+                  <FlatList
+                    data={recentStatuses}
+                    keyExtractor={(item) => item.id}
+                    renderItem={renderStatusItem}
+                    scrollEnabled={false}
+                  />
                 </View>
               )}
-            </TouchableOpacity>
 
-            {currentStatusIndex > 0 && (
-              <TouchableOpacity style={styles.statusPrevButton} onPress={handlePreviousStatus}>
-                <Ionicons name="chevron-back" size={30} color="#fff" />
-              </TouchableOpacity>
-            )}
-            
-            {currentStatusIndex < selectedStatus.statuses.length - 1 && (
-              <TouchableOpacity style={styles.statusNextButton} onPress={handleNextStatus}>
-                <Ionicons name="chevron-forward" size={30} color="#fff" />
-              </TouchableOpacity>
-            )}
+              {/* Viewed Updates Section */}
+              {viewedStatuses.length > 0 && (
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Viewed updates</Text>
+                  <FlatList
+                    data={viewedStatuses}
+                    keyExtractor={(item) => item.id}
+                    renderItem={renderStatusItem}
+                    scrollEnabled={false}
+                  />
+                </View>
+              )}
 
-            <View style={styles.statusProgressContainer}>
-              {selectedStatus.statuses.map((_: any, idx: number) => (
-                <View 
-                  key={idx} 
-                  style={[
-                    styles.statusProgressBar,
-                    idx === currentStatusIndex && styles.statusProgressBarActive,
-                    idx < currentStatusIndex && styles.statusProgressBarCompleted
-                  ]} 
+              {/* Channels Section */}
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Channels</Text>
+                  <TouchableOpacity onPress={() => Alert.alert('Find Channels', 'Discover channels')}>
+                    <Text style={styles.findChannelsText}>Find channels</Text>
+                  </TouchableOpacity>
+                </View>
+                
+                <FlatList
+                  data={channels}
+                  keyExtractor={(item) => item.id}
+                  renderItem={renderChannelItem}
+                  scrollEnabled={false}
                 />
-              ))}
-            </View>
-          </View>
-        )}
-      </Modal>
+                
+                <TouchableOpacity style={styles.exploreButton} onPress={() => Alert.alert('Explore', 'Explore more channels')}>
+                  <Text style={styles.exploreButtonText}>Explore more</Text>
+                </TouchableOpacity>
+              </View>
 
-      {/* Channel View Modal */}
-      <Modal
-        visible={showChannelModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowChannelModal(false)}
-      >
-        {selectedChannel && (
-          <View style={styles.channelModalContainer}>
-            <View style={styles.channelModalHeader}>
-              <TouchableOpacity onPress={() => setShowChannelModal(false)}>
-                <Ionicons name="arrow-back" size={24} color="#075E54" />
-              </TouchableOpacity>
-              <TouchableOpacity>
-                <Ionicons name="ellipsis-vertical" size={20} color="#075E54" />
-              </TouchableOpacity>
-            </View>
+              {/* Privacy Note */}
+              <View style={styles.privacyNote}>
+                <Ionicons name="lock-closed-outline" size={14} color="#999" />
+                <Text style={styles.privacyText}>
+                  Your status updates are end-to-end encrypted
+                </Text>
+              </View>
+            </ScrollView>
 
-            <View style={styles.channelModalContent}>
-              <View style={styles.channelModalAvatarContainer}>
-                <Image source={{ uri: selectedChannel.avatar }} style={styles.channelModalAvatar} />
-                {selectedChannel.verified && (
-                  <View style={styles.channelModalVerified}>
-                    <Ionicons name="checkmark-circle" size={20} color="#25D366" />
+            {/* Status View Modal */}
+            <Modal
+              visible={showStatusModal}
+              transparent={true}
+              animationType="slide"
+              onRequestClose={() => setShowStatusModal(false)}
+            >
+              {selectedStatus && selectedStatus.statuses && selectedStatus.statuses[currentStatusIndex] && (
+                <View style={styles.statusModalContainer}>
+                  <TouchableOpacity style={styles.statusModalClose} onPress={() => setShowStatusModal(false)}>
+                    <Ionicons name="close" size={24} color="#fff" />
+                  </TouchableOpacity>
+                  
+                  <View style={styles.statusHeader}>
+                    <Image source={{ uri: selectedStatus.avatar }} style={styles.statusModalAvatar} />
+                    <View>
+                      <Text style={styles.statusModalName}>{selectedStatus.name}</Text>
+                      <Text style={styles.statusModalTime}>
+                        {selectedStatus.statuses[currentStatusIndex].time}
+                      </Text>
+                    </View>
                   </View>
-                )}
+
+                  <TouchableOpacity 
+                    style={styles.statusModalContent}
+                    onPress={handleNextStatus}
+                    activeOpacity={1}
+                  >
+                    <Image 
+                      source={{ uri: selectedStatus.statuses[currentStatusIndex].media }} 
+                      style={styles.statusModalImage}
+                      resizeMode="contain"
+                    />
+                    {selectedStatus.statuses[currentStatusIndex].caption && (
+                      <View style={styles.statusCaption}>
+                        <Text style={styles.statusCaptionText}>
+                          {selectedStatus.statuses[currentStatusIndex].caption}
+                        </Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+
+                  {currentStatusIndex > 0 && (
+                    <TouchableOpacity style={styles.statusPrevButton} onPress={handlePreviousStatus}>
+                      <Ionicons name="chevron-back" size={30} color="#fff" />
+                    </TouchableOpacity>
+                  )}
+                  
+                  {currentStatusIndex < selectedStatus.statuses.length - 1 && (
+                    <TouchableOpacity style={styles.statusNextButton} onPress={handleNextStatus}>
+                      <Ionicons name="chevron-forward" size={30} color="#fff" />
+                    </TouchableOpacity>
+                  )}
+
+                  <View style={styles.statusProgressContainer}>
+                    {selectedStatus.statuses.map((_: any, idx: number) => (
+                      <View 
+                        key={idx} 
+                        style={[
+                          styles.statusProgressBar,
+                          idx === currentStatusIndex && styles.statusProgressBarActive,
+                          idx < currentStatusIndex && styles.statusProgressBarCompleted
+                        ]} 
+                      />
+                    ))}
+                  </View>
+                </View>
+              )}
+            </Modal>
+
+            {/* Channel View Modal */}
+            <Modal
+              visible={showChannelModal}
+              transparent={true}
+              animationType="slide"
+              onRequestClose={() => setShowChannelModal(false)}
+            >
+              {selectedChannel && (
+                <View style={styles.channelModalContainer}>
+                  <View style={styles.channelModalHeader}>
+                    <TouchableOpacity onPress={() => setShowChannelModal(false)}>
+                      <Ionicons name="arrow-back" size={24} color="#000000" />
+                    </TouchableOpacity>
+                    <TouchableOpacity>
+                      <Ionicons name="ellipsis-vertical" size={20} color="#000000" />
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.channelModalContent}>
+                    <View style={styles.channelModalAvatarContainer}>
+                      <Image source={{ uri: selectedChannel.avatar }} style={styles.channelModalAvatar} />
+                      {selectedChannel.verified && (
+                        <View style={styles.channelModalVerified}>
+                          <Ionicons name="checkmark-circle" size={20} color="#25D366" />
+                        </View>
+                      )}
+                    </View>
+                    
+                    <Text style={styles.channelModalName}>{selectedChannel.name}</Text>
+                    <Text style={styles.channelModalSubscribers}>{selectedChannel.subscribers} subscribers</Text>
+                    
+                    <TouchableOpacity style={styles.followButton}>
+                      <Text style={styles.followButtonText}>Follow</Text>
+                    </TouchableOpacity>
+
+                    <View style={styles.channelLatestUpdate}>
+                      <Text style={styles.channelLatestTitle}>Latest update</Text>
+                      <Text style={styles.channelLatestText}>{selectedChannel.latest}</Text>
+                      <Text style={styles.channelLatestTime}>{selectedChannel.timestamp}</Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+            </Modal>
+
+            {/* My Statuses Modal */}
+            <Modal
+              visible={myStatusVisible}
+              transparent={true}
+              animationType="slide"
+              onRequestClose={() => setMyStatusVisible(false)}
+            >
+              <View style={styles.myStatusModalContainer}>
+                <View style={styles.myStatusModalHeader}>
+                  <TouchableOpacity onPress={() => setMyStatusVisible(false)}>
+                    <Ionicons name="arrow-back" size={24} color="#000000" />
+                  </TouchableOpacity>
+                  <Text style={styles.myStatusModalTitle}>My statuses</Text>
+                  <TouchableOpacity>
+                    <Ionicons name="ellipsis-vertical" size={20} color="#000000" />
+                  </TouchableOpacity>
+                </View>
+
+                <FlatList
+                  data={myStatuses}
+                  keyExtractor={(item) => item.id}
+                  renderItem={renderMyStatus}
+                  numColumns={3}
+                  contentContainerStyle={styles.myStatusGrid}
+                />
+
+                <TouchableOpacity style={styles.addStatusButton} onPress={() => Alert.alert('Add Status', 'Add new status')}>
+                  <Ionicons name="camera" size={24} color="#fff" />
+                  <Text style={styles.addStatusButtonText}>Add to my status</Text>
+                </TouchableOpacity>
               </View>
-              
-              <Text style={styles.channelModalName}>{selectedChannel.name}</Text>
-              <Text style={styles.channelModalSubscribers}>{selectedChannel.subscribers} subscribers</Text>
-              
-              <TouchableOpacity style={styles.followButton}>
-                <Text style={styles.followButtonText}>Follow</Text>
+            </Modal>
+
+            {/* Bottom Tab Navigation - All icons black */}
+            <View style={styles.bottomTab}>
+              <TouchableOpacity
+                style={styles.tabItem}
+                onPress={() => handleTabPress('chats')}
+              >
+                <Ionicons
+                  name="chatbubbles-outline"
+                  size={24}
+                  color="#000000"
+                />
+                <Text style={styles.tabLabel}>Chats</Text>
               </TouchableOpacity>
 
-              <View style={styles.channelLatestUpdate}>
-                <Text style={styles.channelLatestTitle}>Latest update</Text>
-                <Text style={styles.channelLatestText}>{selectedChannel.latest}</Text>
-                <Text style={styles.channelLatestTime}>{selectedChannel.timestamp}</Text>
-              </View>
+              <TouchableOpacity
+                style={styles.tabItem}
+                onPress={() => handleTabPress('updates')}
+              >
+                <Ionicons
+                  name="time-outline"
+                  size={24}
+                  color="#000000"
+                />
+                <Text style={styles.tabLabel}>Updates</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.tabItem}
+                onPress={() => handleTabPress('profile')}
+              >
+                <Ionicons
+                  name="person-outline"
+                  size={24}
+                  color="#000000"
+                />
+                <Text style={styles.tabLabel}>Profile</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.tabItem}
+                onPress={() => handleTabPress('newBroadcast')}
+              >
+                <Ionicons
+                  name="megaphone-outline"
+                  size={24}
+                  color="#000000"
+                />
+                <Text style={styles.tabLabel}>Broadcast</Text>
+              </TouchableOpacity>
             </View>
           </View>
-        )}
-      </Modal>
-
-      {/* My Statuses Modal */}
-      <Modal
-        visible={myStatusVisible}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setMyStatusVisible(false)}
-      >
-        <View style={styles.myStatusModalContainer}>
-          <View style={styles.myStatusModalHeader}>
-            <TouchableOpacity onPress={() => setMyStatusVisible(false)}>
-              <Ionicons name="arrow-back" size={24} color="#000" />
-            </TouchableOpacity>
-            <Text style={styles.myStatusModalTitle}>My statuses</Text>
-            <TouchableOpacity>
-              <Ionicons name="ellipsis-vertical" size={20} color="#000" />
-            </TouchableOpacity>
-          </View>
-
-          <FlatList
-            data={myStatuses}
-            keyExtractor={(item) => item.id}
-            renderItem={renderMyStatus}
-            numColumns={3}
-            contentContainerStyle={styles.myStatusGrid}
-          />
-
-          <TouchableOpacity style={styles.addStatusButton} onPress={() => Alert.alert('Add Status', 'Add new status')}>
-            <Ionicons name="camera" size={24} color="#fff" />
-            <Text style={styles.addStatusButtonText}>Add to my status</Text>
-          </TouchableOpacity>
-        </View>
-      </Modal>
-    </View>
+        </SafeAreaView>
+      </PanGestureHandler>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
+  gestureContainer: {
+    flex: 1,
+  },
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#075E54',
+  },
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
   header: {
-    backgroundColor: '#075E54',
+    backgroundColor: '#ffffff',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 50 : 16,
-    paddingBottom: 16,
+    paddingTop: Platform.OS === 'ios' ? 8 : StatusBar.currentHeight ? StatusBar.currentHeight + 10 : 60,
+    paddingBottom: 12,
+    minHeight: Platform.OS === 'ios' ? 70 : 86,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#e0e0e0',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  backButton: {
+    padding: 4,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#000000',
   },
   headerIcons: {
     flexDirection: 'row',
@@ -472,6 +600,10 @@ const styles = StyleSheet.create({
   },
   headerIcon: {
     padding: 4,
+  },
+  scrollView: {
+    flex: 1,
+    marginBottom: Platform.OS === 'ios' ? 80 : 100,
   },
   section: {
     backgroundColor: '#fff',
@@ -744,7 +876,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 50 : 16,
+    paddingTop: Platform.OS === 'ios' ? 50 : StatusBar.currentHeight ? StatusBar.currentHeight + 15 : 20,
     paddingBottom: 16,
     borderBottomWidth: 0.5,
     borderBottomColor: '#e0e0e0',
@@ -823,7 +955,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 50 : 16,
+    paddingTop: Platform.OS === 'ios' ? 50 : StatusBar.currentHeight ? StatusBar.currentHeight + 15 : 40,
     paddingBottom: 16,
     borderBottomWidth: 0.5,
     borderBottomColor: '#e0e0e0',
@@ -894,5 +1026,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#fff',
+  },
+  bottomTab: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderTopWidth: 0.5,
+    borderTopColor: '#e0e0e0',
+    paddingVertical: 8,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 76,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  tabLabel: {
+    fontSize: 12,
+    color: '#000000',
   },
 });

@@ -1,4 +1,4 @@
-import { View, Text, TextInput, TouchableOpacity, Platform, StyleSheet, Alert, Modal, FlatList, StatusBar, KeyboardAvoidingView, TouchableWithoutFeedback, Keyboard } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Platform, StyleSheet, Alert, Modal, FlatList, StatusBar, KeyboardAvoidingView, TouchableWithoutFeedback, Keyboard, ActivityIndicator } from 'react-native';
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -33,11 +33,14 @@ const countries = [
 ];
 
 export default function RegisterScreen() {
+  const [showEmailInput, setShowEmailInput] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [email, setEmail] = useState('');
   const [selectedCountry, setSelectedCountry] = useState(countries[0]);
   const [modalVisible, setModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [agreeToTerms, setAgreeToTerms] = useState(false);
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const filteredCountries = countries.filter(country =>
@@ -46,10 +49,8 @@ export default function RegisterScreen() {
   );
 
   const formatPhoneNumber = (text: string) => {
-    // Remove all non-digits
     const cleaned = text.replace(/\D/g, '');
     
-    // Apply pattern if available
     if (selectedCountry.pattern) {
       let formatted = '';
       let patternIndex = 0;
@@ -75,7 +76,7 @@ export default function RegisterScreen() {
     setPhoneNumber(formatted);
   };
 
-  const handleNext = () => {
+  const handleContinue = () => {
     const cleanNumber = phoneNumber.replace(/\D/g, '');
     if (cleanNumber.length < 8) {
       Alert.alert('Invalid Number', 'Please enter a valid phone number');
@@ -87,21 +88,40 @@ export default function RegisterScreen() {
       return;
     }
     
-    const fullNumber = `${selectedCountry.dialCode}${cleanNumber}`;
-    console.log('Registering with:', fullNumber);
+    // Show email input field
+    setShowEmailInput(true);
+  };
+
+  const handleEmailSubmit = () => {
+    if (!email || !email.includes('@')) {
+      Alert.alert('Invalid Email', 'Please enter a valid email address');
+      return;
+    }
     
-    // Navigate to verification screen
-    router.push({
-      pathname: '/register/verify-otp',
-      params: { phoneNumber: fullNumber }
-    });
+    setLoading(true);
+    
+    // Simulate sending verification code to email
+    setTimeout(() => {
+      setLoading(false);
+      const fullNumber = `${selectedCountry.dialCode}${phoneNumber.replace(/\D/g, '')}`;
+      
+      // Navigate to verify-otp page with params
+      router.push({
+        pathname: '/register/verify-otp',
+        params: { 
+          phoneNumber: fullNumber,
+          email: email,
+          fromRegistration: 'true'
+        }
+      });
+    }, 1000);
   };
 
   const selectCountry = (country: typeof countries[0]) => {
     setSelectedCountry(country);
     setModalVisible(false);
     setSearchQuery('');
-    setPhoneNumber(''); // Reset phone number when country changes
+    setPhoneNumber('');
   };
 
   const dismissKeyboard = () => {
@@ -119,7 +139,7 @@ export default function RegisterScreen() {
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#075E54" />
+            <Ionicons name="arrow-back" size={24} color="#000000" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Register</Text>
           <View style={styles.headerPlaceholder} />
@@ -129,80 +149,132 @@ export default function RegisterScreen() {
         <View style={styles.content}>
           {/* WhatsApp Logo */}
           <View style={styles.logoContainer}>
-            <Ionicons name="logo-whatsapp" size={60} color="#25D366" />
+            <Ionicons name="logo-whatsapp" size={60} color="#000000" />
           </View>
 
-          <Text style={styles.title}>Enter your phone number</Text>
+          <Text style={styles.title}>Create Account</Text>
           <Text style={styles.subtitle}>
-            WhatsApp will need to verify your phone number. 
-            Carrier rates may apply.
+            {!showEmailInput 
+              ? "Enter your phone number to get started" 
+              : "Enter your email address to verify"}
           </Text>
 
-          {/* Phone Input */}
-          <View style={styles.phoneContainer}>
-            <TouchableOpacity 
-              style={styles.countrySelector}
-              onPress={() => setModalVisible(true)}
-            >
-              <Text style={styles.countryFlag}>{selectedCountry.flag}</Text>
-              <Text style={styles.countryCode}>{selectedCountry.dialCode}</Text>
-              <Ionicons name="chevron-down" size={16} color="#666" />
-            </TouchableOpacity>
-            
-            <TextInput
-              style={styles.phoneInput}
-              placeholder="Phone number"
-              placeholderTextColor="#999"
-              value={phoneNumber}
-              onChangeText={handlePhoneChange}
-              keyboardType="phone-pad"
-              autoFocus
-            />
-          </View>
+          {/* Phone Number Section */}
+          {!showEmailInput ? (
+            <>
+              <View style={styles.phoneContainer}>
+                <TouchableOpacity 
+                  style={styles.countrySelector}
+                  onPress={() => setModalVisible(true)}
+                >
+                  <Text style={styles.countryFlag}>{selectedCountry.flag}</Text>
+                  <Text style={styles.countryCode}>{selectedCountry.dialCode}</Text>
+                  <Ionicons name="chevron-down" size={16} color="#000000" />
+                </TouchableOpacity>
+                
+                <TextInput
+                  style={styles.phoneInput}
+                  placeholder="Phone number"
+                  placeholderTextColor="#999"
+                  value={phoneNumber}
+                  onChangeText={handlePhoneChange}
+                  keyboardType="phone-pad"
+                />
+              </View>
 
-          {/* Terms Agreement */}
-          <TouchableOpacity 
-            style={styles.checkboxContainer}
-            onPress={() => setAgreeToTerms(!agreeToTerms)}
-          >
-            <View style={[styles.checkbox, agreeToTerms && styles.checkboxChecked]}>
-              {agreeToTerms && <Ionicons name="checkmark" size={14} color="#fff" />}
-            </View>
-            <Text style={styles.termsText}>
-              I agree to the <Text style={styles.linkText}>Terms & Conditions</Text> and 
-              <Text style={styles.linkText}> Privacy Policy</Text>
-            </Text>
-          </TouchableOpacity>
+              {/* Terms Agreement */}
+              <TouchableOpacity 
+                style={styles.checkboxContainer}
+                onPress={() => setAgreeToTerms(!agreeToTerms)}
+              >
+                <View style={[styles.checkbox, agreeToTerms && styles.checkboxChecked]}>
+                  {agreeToTerms && <Ionicons name="checkmark" size={14} color="#fff" />}
+                </View>
+                <Text style={styles.termsText}>
+                  I agree to the <Text style={styles.linkText}>Terms & Conditions</Text> and 
+                  <Text style={styles.linkText}> Privacy Policy</Text>
+                </Text>
+              </TouchableOpacity>
 
-          {/* Next Button with Forward Arrow */}
-          <TouchableOpacity 
-            style={[styles.nextButton, phoneNumber.replace(/\D/g, '').length >= 8 && agreeToTerms && styles.nextButtonActive]}
-            onPress={handleNext}
-            disabled={phoneNumber.replace(/\D/g, '').length < 8 || !agreeToTerms}
-          >
-            <Text style={[styles.nextButtonText, phoneNumber.replace(/\D/g, '').length >= 8 && agreeToTerms && styles.nextButtonTextActive]}>
-              Continue
-            </Text>
-            <Ionicons 
-              name="arrow-forward" 
-              size={20} 
-              color={phoneNumber.replace(/\D/g, '').length >= 8 && agreeToTerms ? "#fff" : "#999"} 
-            />
-          </TouchableOpacity>
+              {/* Continue Button */}
+              <TouchableOpacity 
+                style={[styles.nextButton, phoneNumber.replace(/\D/g, '').length >= 8 && agreeToTerms && styles.nextButtonActive]}
+                onPress={handleContinue}
+                disabled={phoneNumber.replace(/\D/g, '').length < 8 || !agreeToTerms}
+              >
+                <Text style={[styles.nextButtonText, phoneNumber.replace(/\D/g, '').length >= 8 && agreeToTerms && styles.nextButtonTextActive]}>
+                  Continue
+                </Text>
+                <Ionicons 
+                  name="arrow-forward" 
+                  size={20} 
+                  color={phoneNumber.replace(/\D/g, '').length >= 8 && agreeToTerms ? "#000000" : "#999"} 
+                />
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              {/* Email Input Section */}
+              <View style={styles.emailContainer}>
+                <Ionicons name="mail-outline" size={20} color="#000000" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.emailInput}
+                  placeholder="Email address"
+                  placeholderTextColor="#999"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoFocus
+                />
+              </View>
+
+              {/* Send Code Button */}
+              <TouchableOpacity 
+                style={[styles.nextButton, email && email.includes('@') && styles.nextButtonActive]}
+                onPress={handleEmailSubmit}
+                disabled={!email || !email.includes('@') || loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#000000" />
+                ) : (
+                  <>
+                    <Text style={[styles.nextButtonText, email && email.includes('@') && styles.nextButtonTextActive]}>
+                      Send Code
+                    </Text>
+                    <Ionicons 
+                      name="send-outline" 
+                      size={20} 
+                      color={email && email.includes('@') ? "#000000" : "#999"} 
+                    />
+                  </>
+                )}
+              </TouchableOpacity>
+
+              {/* Back to phone number */}
+              <TouchableOpacity 
+                style={styles.backLink}
+                onPress={() => setShowEmailInput(false)}
+              >
+                <Ionicons name="arrow-back" size={18} color="#000000" />
+                <Text style={styles.backLinkText}>Back to phone number</Text>
+              </TouchableOpacity>
+            </>
+          )}
 
           {/* Already have account */}
           <TouchableOpacity 
             style={styles.loginLink}
             onPress={() => router.push('/login')}
           >
-            <Ionicons name="log-in-outline" size={18} color="#075E54" />
+            <Ionicons name="log-in-outline" size={18} color="#000000" />
             <Text style={styles.loginLinkText}>Already have an account? Sign in</Text>
           </TouchableOpacity>
 
           {/* Info Text */}
           <Text style={styles.infoText}>
-            <Ionicons name="information-circle-outline" size={12} color="#999" /> 
-            {' '}Your phone number will be used for account verification
+            <Ionicons name="information-circle-outline" size={12} color="#666" /> 
+            {' '}Your phone number and email will be used for account verification
           </Text>
         </View>
 
@@ -218,12 +290,12 @@ export default function RegisterScreen() {
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Select Country</Text>
                 <TouchableOpacity onPress={() => setModalVisible(false)}>
-                  <Ionicons name="close" size={24} color="#075E54" />
+                  <Ionicons name="close" size={24} color="#000000" />
                 </TouchableOpacity>
               </View>
               
               <View style={styles.searchContainer}>
-                <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
+                <Ionicons name="search" size={20} color="#000000" style={styles.searchIcon} />
                 <TextInput
                   style={styles.searchInput}
                   placeholder="Search country or code..."
@@ -233,7 +305,7 @@ export default function RegisterScreen() {
                 />
                 {searchQuery !== '' && (
                   <TouchableOpacity onPress={() => setSearchQuery('')}>
-                    <Ionicons name="close-circle" size={20} color="#999" />
+                    <Ionicons name="close-circle" size={20} color="#000000" />
                   </TouchableOpacity>
                 )}
               </View>
@@ -252,7 +324,7 @@ export default function RegisterScreen() {
                       <Text style={styles.countryDialCode}>{item.dialCode}</Text>
                     </View>
                     {selectedCountry.dialCode === item.dialCode && selectedCountry.name === item.name && (
-                      <Ionicons name="checkmark-circle" size={24} color="#25D366" />
+                      <Ionicons name="checkmark-circle" size={24} color="#000000" />
                     )}
                   </TouchableOpacity>
                 )}
@@ -287,7 +359,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#0DA043',
+    color: '#000000',
   },
   headerPlaceholder: {
     width: 32,
@@ -304,13 +376,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#0D9E17',
+    color: '#000000',
     marginBottom: 12,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 14,
-    color: '#0D9E17',
+    color: '#666',
     textAlign: 'center',
     marginBottom: 32,
     lineHeight: 20,
@@ -341,13 +413,32 @@ const styles = StyleSheet.create({
   countryCode: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#333',
+    color: '#000000',
   },
   phoneInput: {
     flex: 1,
     padding: 14,
     fontSize: 16,
-    color: '#333',
+    color: '#000000',
+  },
+  emailContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 12,
+    marginBottom: 24,
+    width: '100%',
+    backgroundColor: '#fff',
+  },
+  inputIcon: {
+    marginLeft: 14,
+  },
+  emailInput: {
+    flex: 1,
+    padding: 14,
+    fontSize: 16,
+    color: '#000000',
   },
   checkboxContainer: {
     flexDirection: 'row',
@@ -366,8 +457,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   checkboxChecked: {
-    backgroundColor: '#25D366',
-    borderColor: '#25D366',
+    backgroundColor: '#000000',
+    borderColor: '#000000',
   },
   termsText: {
     fontSize: 13,
@@ -375,7 +466,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   linkText: {
-    color: '#0CA036',
+    color: '#000000',
     fontWeight: '500',
   },
   nextButton: {
@@ -384,13 +475,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     paddingHorizontal: 32,
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderRadius: 25,
     backgroundColor: '#e0e0e0',
     marginBottom: 16,
+    width: '100%',
   },
   nextButtonActive: {
-    backgroundColor: '#25D366',
+    backgroundColor: '#E8E8E8',
+    borderWidth: 1,
+    borderColor: '#000000',
   },
   nextButtonText: {
     fontSize: 16,
@@ -398,7 +492,7 @@ const styles = StyleSheet.create({
     color: '#999',
   },
   nextButtonTextActive: {
-    color: '#fff',
+    color: '#000000',
   },
   loginLink: {
     flexDirection: 'row',
@@ -410,13 +504,25 @@ const styles = StyleSheet.create({
   },
   loginLinkText: {
     fontSize: 14,
-    color: '#0B9741',
+    color: '#000000',
     fontWeight: '500',
+  },
+  backLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 16,
+  },
+  backLinkText: {
+    fontSize: 14,
+    color: '#000000',
   },
   infoText: {
     fontSize: 12,
-    color: '#999',
+    color: '#666',
     textAlign: 'center',
+    marginTop: 20,
   },
   modalOverlay: {
     flex: 1,
@@ -440,7 +546,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#0A932A',
+    color: '#000000',
   },
   searchContainer: {
     flexDirection: 'row',
@@ -457,6 +563,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     fontSize: 16,
+    color: '#000000',
   },
   countryItem: {
     flexDirection: 'row',
@@ -475,11 +582,11 @@ const styles = StyleSheet.create({
   countryName: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#333',
+    color: '#000000',
   },
   countryDialCode: {
     fontSize: 13,
-    color: '#999',
+    color: '#666',
     marginTop: 2,
   },
 });

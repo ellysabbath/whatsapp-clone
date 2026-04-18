@@ -71,7 +71,7 @@ export default function NewGroupScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => step === 1 ? router.back() : setStep(1)}>
-          <Ionicons name="arrow-back" size={24} color="#075E54" />
+          <Ionicons name="arrow-back" size={24} color="#051A17" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
           {step === 1 ? 'Add participants' : 'New group'}
@@ -168,13 +168,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 50 : 16,
+    paddingTop: Platform.OS === 'ios' ? 50 : 76,
     paddingBottom: 12,
     borderBottomWidth: 0.5,
     borderBottomColor: '#e0e0e0',
   },
-  headerTitle: { fontSize: 18, fontWeight: '600', color: '#075E54' },
-  nextButton: { fontSize: 16, fontWeight: '600', color: '#075E54' },
+  headerTitle: { fontSize: 18, fontWeight: '600', color: '#031B19' },
+  nextButton: { fontSize: 16, fontWeight: '600', color: '#041D1A' },
   nextButtonDisabled: { opacity: 0.5 },
   searchContainer: {
     flexDirection: 'row',
@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
   searchIcon: { marginRight: 8 },
   searchInput: { flex: 1, fontSize: 16 },
   selectedCount: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#e8f5e9' },
-  selectedCountText: { fontSize: 14, color: '#075E54', fontWeight: '500' },
+  selectedCountText: { fontSize: 14, color: '#031916', fontWeight: '500' },
   contactItem: {
     flexDirection: 'row',
     alignItems: 'center',

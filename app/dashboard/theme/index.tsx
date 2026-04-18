@@ -189,8 +189,8 @@ export default function ThemeSettingsScreen() {
   // Dynamic styles based on selected theme
   const dynamicStyles = {
     container: { backgroundColor: currentColors.background },
-    header: { backgroundColor: currentColors.primary },
-    headerTitle: { color: '#FFFFFF' },
+    header: { backgroundColor: '#FFFFFF' }, // Changed to white
+    headerTitle: { color: currentColors.text }, // Changed to use theme text color
     sectionTitle: { color: currentColors.text },
     themeCard: { backgroundColor: currentColors.surface, borderColor: currentColors.border },
     themeName: { color: currentColors.text },
@@ -235,16 +235,16 @@ export default function ThemeSettingsScreen() {
 
   return (
     <View style={[styles.container, dynamicStyles.container]}>
-      <StatusBar barStyle={previewTheme === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={currentColors.primary} />
+      <StatusBar barStyle={previewTheme === 'dark' ? 'light-content' : 'dark-content'} backgroundColor="#FFFFFF" />
       
-      {/* Header */}
+      {/* Header - Now with white background */}
       <View style={[styles.header, dynamicStyles.header]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          <Ionicons name="arrow-back" size={24} color={currentColors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, dynamicStyles.headerTitle]}>Theme</Text>
         <TouchableOpacity onPress={handleReset} style={styles.resetButton}>
-          <Ionicons name="refresh-outline" size={22} color="#FFFFFF" />
+          <Ionicons name="refresh-outline" size={22} color={currentColors.text} />
         </TouchableOpacity>
       </View>
 
@@ -331,8 +331,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 50 : 16,
+    paddingTop: Platform.OS === 'ios' ? 50 : 66,
     paddingBottom: 16,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#E0E0E0', // Added subtle border like WhatsApp
   },
   backButton: {
     padding: 4,

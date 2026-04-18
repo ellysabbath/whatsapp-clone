@@ -50,11 +50,11 @@ export default function SettingsScreen() {
   };
 
   const handleThemePress = () => {
-    router.push('/theme-settings');
+    router.push('/dashboard/theme');
   };
 
   const handleProfilePress = () => {
-    router.push('/profile');
+    router.push('/dashboard/profile');
   };
 
   const handleAccountPress = () => {
@@ -66,7 +66,7 @@ export default function SettingsScreen() {
   };
 
   const handleStarredPress = () => {
-    router.push('/starred-messages');
+    router.push('/dashboard/starred');
   };
 
   const handleChatBackupPress = () => {
@@ -412,7 +412,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 50 : 16,
+    paddingTop: Platform.OS === 'ios' ? 50 : 66,
     paddingBottom: 16,
   },
   headerDark: {

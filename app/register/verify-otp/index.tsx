@@ -4,7 +4,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function VerifyScreen() {
-  const { phoneNumber } = useLocalSearchParams();
+  const { phoneNumber, email, fromRegistration } = useLocalSearchParams();
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const [timer, setTimer] = useState(60);
   const [canResend, setCanResend] = useState(false);
@@ -55,7 +55,7 @@ export default function VerifyScreen() {
     setTimeout(() => {
       setIsLoading(false);
       if (verificationCode === '123456') {
-        Alert.alert('Success', 'Phone number verified successfully!');
+        Alert.alert('Success', 'Account verified successfully!');
         router.replace('/dashboard');
       } else {
         Alert.alert('Error', 'Invalid verification code. Please try again.');
@@ -66,7 +66,8 @@ export default function VerifyScreen() {
   const handleResendCode = () => {
     setCanResend(false);
     setTimer(60);
-    Alert.alert('Code Resent', `A new verification code has been sent to ${phoneNumber}`);
+    const contactInfo = email || phoneNumber;
+    Alert.alert('Code Resent', `A new verification code has been sent to ${contactInfo}`);
   };
 
   return (
@@ -79,23 +80,25 @@ export default function VerifyScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#075E54" />
+          <Ionicons name="arrow-back" size={24} color="#000000" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Verify Phone Number</Text>
+        <Text style={styles.headerTitle}>Verify</Text>
         <View style={styles.headerPlaceholder} />
       </View>
 
       {/* Content */}
       <View style={styles.content}>
         <View style={styles.iconContainer}>
-          <Ionicons name="chatbubble-ellipses" size={60} color="#25D366" />
+          <Ionicons name="chatbubble-ellipses" size={60} color="#000000" />
         </View>
 
-        <Text style={styles.title}>We have sent you an SMS</Text>
+        <Text style={styles.title}>Verify your account</Text>
         <Text style={styles.subtitle}>
-          with a 6-digit verification code to
+          We have sent a verification code to
         </Text>
-        <Text style={styles.phoneNumber}>{phoneNumber}</Text>
+        <Text style={styles.contactInfo}>
+          {email || phoneNumber}
+        </Text>
 
         {/* OTP Inputs */}
         <View style={styles.otpContainer}>
@@ -110,6 +113,7 @@ export default function VerifyScreen() {
               keyboardType="number-pad"
               maxLength={1}
               textAlign="center"
+              placeholderTextColor="#999"
             />
           ))}
         </View>
@@ -123,25 +127,25 @@ export default function VerifyScreen() {
           <Text style={styles.verifyButtonText}>
             {isLoading ? 'Verifying...' : 'Verify'}
           </Text>
+          <Ionicons 
+            name="checkmark-circle" 
+            size={20} 
+            color="#000000" 
+            style={styles.buttonIcon}
+          />
         </TouchableOpacity>
 
         {/* Resend Section */}
         <View style={styles.resendContainer}>
-          <Text style={styles.resendText}>Didn`t receive the code? </Text>
+          <Text style={styles.resendText}>Didn't receive the code? </Text>
           {canResend ? (
             <TouchableOpacity onPress={handleResendCode}>
-              <Text style={styles.resendLink}>Resend SMS</Text>
+              <Text style={styles.resendLink}>Resend code</Text>
             </TouchableOpacity>
           ) : (
             <Text style={styles.timerText}>Resend in {timer}s</Text>
           )}
         </View>
-
-        {/* Alternative Methods */}
-        <TouchableOpacity style={styles.callButton}>
-          <Ionicons name="call-outline" size={20} color="#075E54" />
-          <Text style={styles.callButtonText}>Call me instead</Text>
-        </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
   );
@@ -157,7 +161,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 50 : 16,
+    paddingTop: Platform.OS === 'ios' ? 50 : 66,
     paddingBottom: 12,
     borderBottomWidth: 0.5,
     borderBottomColor: '#e0e0e0',
@@ -168,7 +172,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#075E54',
+    color: '#000000',
   },
   headerPlaceholder: {
     width: 32,
@@ -185,7 +189,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#000',
+    color: '#000000',
     marginBottom: 12,
     textAlign: 'center',
   },
@@ -194,10 +198,10 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
   },
-  phoneNumber: {
+  contactInfo: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#075E54',
+    color: '#000000',
     marginTop: 4,
     marginBottom: 32,
   },
@@ -206,6 +210,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 12,
     marginBottom: 32,
+    flexWrap: 'wrap',
   },
   otpInput: {
     width: 50,
@@ -216,23 +221,33 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '600',
     backgroundColor: '#f9f9f9',
+    color: '#000000',
   },
   verifyButton: {
-    backgroundColor: '#25D366',
+    backgroundColor: '#E8E8E8',
     paddingHorizontal: 40,
     paddingVertical: 14,
     borderRadius: 25,
     width: '100%',
     alignItems: 'center',
     marginBottom: 24,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#000000',
   },
   verifyButtonDisabled: {
-    backgroundColor: '#a5d6a7',
+    backgroundColor: '#e0e0e0',
+    opacity: 0.7,
   },
   verifyButtonText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#000000',
+  },
+  buttonIcon: {
+    marginLeft: 4,
   },
   resendContainer: {
     flexDirection: 'row',
@@ -246,21 +261,10 @@ const styles = StyleSheet.create({
   resendLink: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#075E54',
+    color: '#000000',
   },
   timerText: {
     fontSize: 14,
     color: '#999',
-  },
-  callButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 12,
-  },
-  callButtonText: {
-    fontSize: 14,
-    color: '#075E54',
-    fontWeight: '500',
   },
 });

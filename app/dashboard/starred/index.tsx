@@ -141,7 +141,7 @@ export default function StarredMessagesScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#075E54" />
+          <Ionicons name="arrow-back" size={24} color="#041816" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Starred messages</Text>
         <TouchableOpacity style={styles.menuButton}>
@@ -202,7 +202,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 50 : 16,
+    paddingTop: Platform.OS === 'ios' ? 50 : 76,
     paddingBottom: 12,
     backgroundColor: '#fff',
     borderBottomWidth: 0.5,
@@ -214,7 +214,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#075E54',
+    color: '#041816',
   },
   menuButton: {
     padding: 4,
