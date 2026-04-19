@@ -1,7 +1,9 @@
-import { View, Text, TextInput, TouchableOpacity, Platform, StyleSheet, Alert, Modal, FlatList, KeyboardAvoidingView, ScrollView, Keyboard } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Platform, StyleSheet, Alert, Modal, FlatList, KeyboardAvoidingView, ScrollView, Keyboard, ActivityIndicator } from 'react-native';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import loginApi from '../../lib/api/loginApi';
+import { useUser } from '../../context/UserContext';
 
 const countries = [
   { code: '+1', name: 'United States', flag: '🇺🇸', dialCode: '+1' },
@@ -37,7 +39,21 @@ export default function LoginScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [checkingPhone, setCheckingPhone] = useState(false);
   const router = useRouter();
+  const { login, user, isAuthenticated } = useUser();
+
+  // Check if user is already logged in
+  useEffect(() => {
+    const checkAuth = async () => {
+      const authenticated = await loginApi.isAuthenticated();
+      if (authenticated) {
+        router.replace('/dashboard');
+      }
+    };
+    checkAuth();
+  }, []);
 
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => {
@@ -58,12 +74,80 @@ export default function LoginScreen() {
     country.dialCode.includes(searchQuery)
   );
 
-  const handleLogin = () => {
-    if (!phoneNumber.trim()) {
-      Alert.alert('Error', 'Please enter your phone number');
+  const formatPhoneNumber = (text: string) => {
+    // Remove all non-digits
+    const cleaned = text.replace(/\D/g, '');
+    
+    // Format based on country pattern (simplified)
+    if (selectedCountry.dialCode === '+255') {
+      // Tanzanian format: ### ### ###
+      if (cleaned.length <= 3) return cleaned;
+      if (cleaned.length <= 6) return `${cleaned.slice(0, 3)} ${cleaned.slice(3)}`;
+      return `${cleaned.slice(0, 3)} ${cleaned.slice(3, 6)} ${cleaned.slice(6, 9)}`;
+    }
+    
+    return cleaned;
+  };
+
+  const handlePhoneChange = (text: string) => {
+    const formatted = formatPhoneNumber(text);
+    setPhoneNumber(formatted);
+  };
+
+  const handleLogin = async () => {
+    const cleanNumber = phoneNumber.replace(/\D/g, '');
+    if (!cleanNumber || cleanNumber.length < 8) {
+      Alert.alert('Error', 'Please enter a valid phone number');
       return;
     }
-    router.replace('/dashboard');
+
+    const fullNumber = `${selectedCountry.dialCode}${cleanNumber}`;
+    
+    setIsLoading(true);
+    
+    try {
+      // First check if phone number exists
+      setCheckingPhone(true);
+      const checkResponse = await loginApi.checkPhoneNumber(fullNumber);
+      
+      if (!checkResponse.valid) {
+        Alert.alert('Error', checkResponse.message || 'Invalid phone number');
+        setIsLoading(false);
+        setCheckingPhone(false);
+        return;
+      }
+      
+      if (!checkResponse.user_exists) {
+        Alert.alert(
+          'Account Not Found',
+          'No account exists with this phone number. Would you like to create a new account?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Create Account', onPress: () => router.push('/register') }
+          ]
+        );
+        setIsLoading(false);
+        setCheckingPhone(false);
+        return;
+      }
+      
+      // Proceed with login
+      const loginResponse = await login(fullNumber);
+      
+      if (loginResponse) {
+        Alert.alert('Success', 'Login successful!', [
+          { text: 'OK', onPress: () => router.replace('/dashboard') }
+        ]);
+      } else {
+        Alert.alert('Login Failed', 'Unable to login. Please try again.');
+      }
+    } catch (error: any) {
+      console.error('Login error:', error);
+      Alert.alert('Error', error.message || 'Failed to login. Please check your connection.');
+    } finally {
+      setIsLoading(false);
+      setCheckingPhone(false);
+    }
   };
 
   const handleCreateAccount = () => {
@@ -74,6 +158,7 @@ export default function LoginScreen() {
     setSelectedCountry(country);
     setModalVisible(false);
     setSearchQuery('');
+    setPhoneNumber('');
   };
 
   return (
@@ -83,7 +168,6 @@ export default function LoginScreen() {
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
       <View style={styles.header}>
-        
         <Text style={styles.headerTitle}>ApTec</Text>
         <View style={styles.headerRight} />
       </View>
@@ -111,14 +195,25 @@ export default function LoginScreen() {
               placeholder="Phone number"
               placeholderTextColor="#999"
               value={phoneNumber}
-              onChangeText={setPhoneNumber}
+              onChangeText={handlePhoneChange}
               keyboardType="phone-pad"
+              editable={!isLoading}
             />
           </View>
 
-          <TouchableOpacity style={styles.button} onPress={handleLogin}>
-            <Text style={styles.buttonText}>Continue</Text>
-            <Ionicons name="arrow-forward" size={20} color="#000000" />
+          <TouchableOpacity 
+            style={[styles.button, isLoading && styles.buttonDisabled]} 
+            onPress={handleLogin}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator size="small" color="#000000" />
+            ) : (
+              <>
+                <Text style={styles.buttonText}>Continue</Text>
+                <Ionicons name="arrow-forward" size={20} color="#000000" />
+              </>
+            )}
           </TouchableOpacity>
 
           <View style={styles.divider}>
@@ -127,7 +222,11 @@ export default function LoginScreen() {
             <View style={styles.dividerLine} />
           </View>
 
-          <TouchableOpacity style={styles.createAccountButton} onPress={handleCreateAccount}>
+          <TouchableOpacity 
+            style={styles.createAccountButton} 
+            onPress={handleCreateAccount}
+            disabled={isLoading}
+          >
             <Ionicons name="person-add-outline" size={20} color="#000000" />
             <Text style={styles.createAccountText}>Create new account</Text>
           </TouchableOpacity>
@@ -196,7 +295,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', 
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 60 : 40, 
+    paddingTop: Platform.OS === 'ios' ? 60 : 60, 
     paddingBottom: 20,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
@@ -288,6 +387,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
   buttonText: { 
     fontSize: 16, 

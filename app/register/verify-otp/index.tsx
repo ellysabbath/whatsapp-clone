@@ -1,153 +1,194 @@
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, StatusBar, KeyboardAvoidingView, Platform } from 'react-native';
-import { useState, useRef, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity,Platform, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import registerApi from '../../../lib/api/registerApi';
 
-export default function VerifyScreen() {
-  const { phoneNumber, email, fromRegistration } = useLocalSearchParams();
-  const [code, setCode] = useState(['', '', '', '', '', '']);
+export default function VerifyOTPScreen() {
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [loading, setLoading] = useState(false);
   const [timer, setTimer] = useState(60);
   const [canResend, setCanResend] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const inputRefs = useRef<(TextInput | null)[]>([]);
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const { phoneNumber, email, fromRegistration } = params;
 
   useEffect(() => {
     // Start countdown timer
-    if (timer > 0 && !canResend) {
-      const interval = setInterval(() => {
-        setTimer((prev) => prev - 1);
-      }, 1000);
-      return () => clearInterval(interval);
-    } else if (timer === 0) {
-      setCanResend(true);
-    }
-  }, [timer]);
+    const interval = setInterval(() => {
+      setTimer((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          setCanResend(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
 
-  const handleCodeChange = (text: string, index: number) => {
-    const newCode = [...code];
-    newCode[index] = text;
-    setCode(newCode);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleOtpChange = (text: string, index: number) => {
+    const newOtp = [...otp];
+    newOtp[index] = text;
+    setOtp(newOtp);
 
     // Auto-focus next input
-    if (text.length === 1 && index < 5) {
+    if (text && index < 5) {
       inputRefs.current[index + 1]?.focus();
     }
   };
 
   const handleKeyPress = (e: any, index: number) => {
-    // Handle backspace
-    if (e.nativeEvent.key === 'Backspace' && index > 0 && !code[index]) {
+    if (e.nativeEvent.key === 'Backspace' && !otp[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
   };
 
-  const handleVerify = () => {
-    const verificationCode = code.join('');
-    if (verificationCode.length !== 6) {
-      Alert.alert('Error', 'Please enter the 6-digit verification code');
+  const handleVerify = async () => {
+    const otpCode = otp.join('');
+    if (otpCode.length !== 6) {
+      Alert.alert('Invalid Code', 'Please enter the 6-digit verification code');
       return;
     }
 
-    setIsLoading(true);
+    setLoading(true);
     
-    // Simulate verification
-    setTimeout(() => {
-      setIsLoading(false);
-      if (verificationCode === '123456') {
-        Alert.alert('Success', 'Account verified successfully!');
-        router.replace('/dashboard');
+    try {
+      const response = await registerApi.verifyOTP(
+        phoneNumber as string,
+        email as string,
+        otpCode
+      );
+      
+      if (response.success) {
+        Alert.alert(
+          'Success',
+          'Account created successfully!',
+          [{ text: 'OK', onPress: () => router.replace('/dashboard/profile') }]
+        );
       } else {
-        Alert.alert('Error', 'Invalid verification code. Please try again.');
+        Alert.alert('Verification Failed', response.errors?.otp_code || 'Invalid verification code');
       }
-    }, 1500);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to verify code. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleResendCode = () => {
-    setCanResend(false);
-    setTimer(60);
-    const contactInfo = email || phoneNumber;
-    Alert.alert('Code Resent', `A new verification code has been sent to ${contactInfo}`);
+  const handleResendCode = async () => {
+    if (!canResend) return;
+    
+    setLoading(true);
+    
+    try {
+      const response = await registerApi.resendOTP(
+        phoneNumber as string,
+        email as string
+      );
+      
+      if (response.success) {
+        Alert.alert('Code Sent', 'A new verification code has been sent to your email');
+        setTimer(60);
+        setCanResend(false);
+        setOtp(['', '', '', '', '', '']);
+        inputRefs.current[0]?.focus();
+        
+        // Restart timer
+        const interval = setInterval(() => {
+          setTimer((prev) => {
+            if (prev <= 1) {
+              clearInterval(interval);
+              setCanResend(true);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+      } else {
+        Alert.alert('Error', response.message || 'Failed to resend code');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to resend code. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
-      
-      {/* Header */}
+    <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#000000" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Verify</Text>
+        <Text style={styles.headerTitle}>Verify Code</Text>
         <View style={styles.headerPlaceholder} />
       </View>
 
-      {/* Content */}
       <View style={styles.content}>
-        <View style={styles.iconContainer}>
-          <Ionicons name="chatbubble-ellipses" size={60} color="#000000" />
-        </View>
-
-        <Text style={styles.title}>Verify your account</Text>
+        <Ionicons name="mail-outline" size={80} color="#000000" style={styles.icon} />
+        
+        <Text style={styles.title}>Check your email</Text>
         <Text style={styles.subtitle}>
-          We have sent a verification code to
-        </Text>
-        <Text style={styles.contactInfo}>
-          {email || phoneNumber}
+          We've sent a verification code to{'\n'}
+          <Text style={styles.email}>{email}</Text>
         </Text>
 
-        {/* OTP Inputs */}
         <View style={styles.otpContainer}>
-          {code.map((digit, index) => (
+          {otp.map((digit, index) => (
             <TextInput
               key={index}
               ref={(ref) => (inputRefs.current[index] = ref)}
               style={styles.otpInput}
               value={digit}
-              onChangeText={(text) => handleCodeChange(text, index)}
+              onChangeText={(text) => handleOtpChange(text, index)}
               onKeyPress={(e) => handleKeyPress(e, index)}
               keyboardType="number-pad"
               maxLength={1}
-              textAlign="center"
-              placeholderTextColor="#999"
+              editable={!loading}
             />
           ))}
         </View>
 
-        {/* Verify Button */}
         <TouchableOpacity 
-          style={[styles.verifyButton, isLoading && styles.verifyButtonDisabled]}
+          style={[styles.verifyButton, otp.join('').length === 6 && !loading && styles.verifyButtonActive]}
           onPress={handleVerify}
-          disabled={isLoading}
+          disabled={otp.join('').length !== 6 || loading}
         >
-          <Text style={styles.verifyButtonText}>
-            {isLoading ? 'Verifying...' : 'Verify'}
-          </Text>
-          <Ionicons 
-            name="checkmark-circle" 
-            size={20} 
-            color="#000000" 
-            style={styles.buttonIcon}
-          />
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={[styles.verifyButtonText, otp.join('').length === 6 && styles.verifyButtonTextActive]}>
+              Verify & Create Account
+            </Text>
+          )}
         </TouchableOpacity>
 
-        {/* Resend Section */}
         <View style={styles.resendContainer}>
-          <Text style={styles.resendText}>Didn't receive the code? </Text>
+          <Text style={styles.resendText}>
+            Didn't receive the code?{' '}
+          </Text>
           {canResend ? (
             <TouchableOpacity onPress={handleResendCode}>
-              <Text style={styles.resendLink}>Resend code</Text>
+              <Text style={styles.resendLink}>Resend Code</Text>
             </TouchableOpacity>
           ) : (
             <Text style={styles.timerText}>Resend in {timer}s</Text>
           )}
         </View>
+
+        <TouchableOpacity 
+          style={styles.backLink}
+          onPress={() => router.back()}
+        >
+          <Ionicons name="arrow-back" size={18} color="#000000" />
+          <Text style={styles.backLinkText}>Back to registration</Text>
+        </TouchableOpacity>
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -161,7 +202,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 50 : 66,
+    paddingTop: Platform.OS === 'ios' ? 50 : 16,
     paddingBottom: 12,
     borderBottomWidth: 0.5,
     borderBottomColor: '#e0e0e0',
@@ -183,7 +224,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 40,
   },
-  iconContainer: {
+  icon: {
     marginBottom: 24,
   },
   title: {
@@ -197,20 +238,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     textAlign: 'center',
-  },
-  contactInfo: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000000',
-    marginTop: 4,
     marginBottom: 32,
+    lineHeight: 20,
+  },
+  email: {
+    color: '#000000',
+    fontWeight: '600',
   },
   otpContainer: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 12,
+    justifyContent: 'space-between',
+    width: '100%',
     marginBottom: 32,
-    flexWrap: 'wrap',
   },
   otpInput: {
     width: 50,
@@ -218,41 +257,35 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 12,
+    textAlign: 'center',
     fontSize: 20,
     fontWeight: '600',
-    backgroundColor: '#f9f9f9',
     color: '#000000',
   },
   verifyButton: {
-    backgroundColor: '#E8E8E8',
-    paddingHorizontal: 40,
+    backgroundColor: '#e0e0e0',
+    paddingHorizontal: 32,
     paddingVertical: 14,
     borderRadius: 25,
     width: '100%',
     alignItems: 'center',
     marginBottom: 24,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: '#000000',
   },
-  verifyButtonDisabled: {
-    backgroundColor: '#e0e0e0',
-    opacity: 0.7,
+  verifyButtonActive: {
+    backgroundColor: '#000000',
   },
   verifyButtonText: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#000000',
+    fontWeight: '600',
+    color: '#999',
   },
-  buttonIcon: {
-    marginLeft: 4,
+  verifyButtonTextActive: {
+    color: '#fff',
   },
   resendContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   resendText: {
     fontSize: 14,
@@ -260,11 +293,21 @@ const styles = StyleSheet.create({
   },
   resendLink: {
     fontSize: 14,
-    fontWeight: '600',
     color: '#000000',
+    fontWeight: '600',
   },
   timerText: {
     fontSize: 14,
     color: '#999',
+  },
+  backLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 16,
+  },
+  backLinkText: {
+    fontSize: 14,
+    color: '#000000',
   },
 });

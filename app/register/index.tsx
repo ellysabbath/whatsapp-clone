@@ -2,6 +2,7 @@ import { View, Text, TextInput, TouchableOpacity, Platform, StyleSheet, Alert, M
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import registerApi from '../../lib/api/registerApi';
 
 // Country data
 const countries = [
@@ -41,6 +42,7 @@ export default function RegisterScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [agreeToTerms, setAgreeToTerms] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [checkingPhone, setCheckingPhone] = useState(false);
   const router = useRouter();
 
   const filteredCountries = countries.filter(country =>
@@ -76,7 +78,7 @@ export default function RegisterScreen() {
     setPhoneNumber(formatted);
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     const cleanNumber = phoneNumber.replace(/\D/g, '');
     if (cleanNumber.length < 8) {
       Alert.alert('Invalid Number', 'Please enter a valid phone number');
@@ -88,33 +90,68 @@ export default function RegisterScreen() {
       return;
     }
     
-    // Show email input field
-    setShowEmailInput(true);
+    // Check phone number with backend
+    setCheckingPhone(true);
+    const fullNumber = `${selectedCountry.dialCode}${cleanNumber}`;
+    
+    try {
+      const response = await registerApi.checkPhoneNumber(fullNumber);
+      
+      if (response.valid) {
+        if (response.user_exists) {
+          Alert.alert(
+            'Account Exists',
+            'An account with this phone number already exists. Would you like to login instead?',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Login', onPress: () => router.push('/login') }
+            ]
+          );
+        } else {
+          // Phone number is valid and doesn't exist, show email input
+          setShowEmailInput(true);
+        }
+      } else {
+        Alert.alert('Invalid Number', response.message || 'Please enter a valid phone number');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to verify phone number. Please check your connection.');
+    } finally {
+      setCheckingPhone(false);
+    }
   };
 
-  const handleEmailSubmit = () => {
+  const handleEmailSubmit = async () => {
     if (!email || !email.includes('@')) {
       Alert.alert('Invalid Email', 'Please enter a valid email address');
       return;
     }
     
     setLoading(true);
+    const cleanNumber = phoneNumber.replace(/\D/g, '');
+    const fullNumber = `${selectedCountry.dialCode}${cleanNumber}`;
     
-    // Simulate sending verification code to email
-    setTimeout(() => {
-      setLoading(false);
-      const fullNumber = `${selectedCountry.dialCode}${phoneNumber.replace(/\D/g, '')}`;
+    try {
+      const response = await registerApi.sendOTP(fullNumber, email);
       
-      // Navigate to verify-otp page with params
-      router.push({
-        pathname: '/register/verify-otp',
-        params: { 
-          phoneNumber: fullNumber,
-          email: email,
-          fromRegistration: 'true'
-        }
-      });
-    }, 1000);
+      if (response.success) {
+        // Navigate to verify-otp page with params
+        router.push({
+          pathname: '/register/verify-otp',
+          params: { 
+            phoneNumber: fullNumber,
+            email: email,
+            fromRegistration: 'true'
+          }
+        });
+      } else {
+        Alert.alert('Error', response.message || 'Failed to send verification code');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to send verification code. Please check your connection.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const selectCountry = (country: typeof countries[0]) => {
@@ -198,18 +235,24 @@ export default function RegisterScreen() {
 
               {/* Continue Button */}
               <TouchableOpacity 
-                style={[styles.nextButton, phoneNumber.replace(/\D/g, '').length >= 8 && agreeToTerms && styles.nextButtonActive]}
+                style={[styles.nextButton, phoneNumber.replace(/\D/g, '').length >= 8 && agreeToTerms && !checkingPhone && styles.nextButtonActive]}
                 onPress={handleContinue}
-                disabled={phoneNumber.replace(/\D/g, '').length < 8 || !agreeToTerms}
+                disabled={phoneNumber.replace(/\D/g, '').length < 8 || !agreeToTerms || checkingPhone}
               >
-                <Text style={[styles.nextButtonText, phoneNumber.replace(/\D/g, '').length >= 8 && agreeToTerms && styles.nextButtonTextActive]}>
-                  Continue
-                </Text>
-                <Ionicons 
-                  name="arrow-forward" 
-                  size={20} 
-                  color={phoneNumber.replace(/\D/g, '').length >= 8 && agreeToTerms ? "#000000" : "#999"} 
-                />
+                {checkingPhone ? (
+                  <ActivityIndicator color="#000000" />
+                ) : (
+                  <>
+                    <Text style={[styles.nextButtonText, phoneNumber.replace(/\D/g, '').length >= 8 && agreeToTerms && styles.nextButtonTextActive]}>
+                      Continue
+                    </Text>
+                    <Ionicons 
+                      name="arrow-forward" 
+                      size={20} 
+                      color={phoneNumber.replace(/\D/g, '').length >= 8 && agreeToTerms ? "#000000" : "#999"} 
+                    />
+                  </>
+                )}
               </TouchableOpacity>
             </>
           ) : (
@@ -231,7 +274,7 @@ export default function RegisterScreen() {
 
               {/* Send Code Button */}
               <TouchableOpacity 
-                style={[styles.nextButton, email && email.includes('@') && styles.nextButtonActive]}
+                style={[styles.nextButton, email && email.includes('@') && !loading && styles.nextButtonActive]}
                 onPress={handleEmailSubmit}
                 disabled={!email || !email.includes('@') || loading}
               >

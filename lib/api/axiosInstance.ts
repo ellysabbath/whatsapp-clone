@@ -1,70 +1,79 @@
-// api/axiosInstance.ts
 import axios from 'axios';
-import { API_CONFIG } from './_config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import API_CONFIG from './_config';
+import { Platform } from 'react-native';
 
-// Create axios instance
-const api = axios.create({
-  baseURL: API_CONFIG.BASE_URL,
+// Get the correct base URL for the platform
+const getBaseUrl = () => {
+  if (__DEV__) {
+    if (Platform.OS === 'android') {
+      return 'http://192.168.137.1:8000/api';
+    }
+    return 'http://192.168.137.1:8000/api';
+  }
+  return API_CONFIG.BASE_URL;
+};
+
+const axiosInstance = axios.create({
+  baseURL: getBaseUrl(),
+  timeout: API_CONFIG.TIMEOUT,
   headers: {
     'Content-Type': 'application/json',
-    'Accept': 'application/json',
-    ...API_CONFIG.DEFAULT_HEADERS,
   },
-  timeout: API_CONFIG.TIMEOUT,
 });
 
-// Request interceptor
-api.interceptors.request.use(
+// Request interceptor to add token
+axiosInstance.interceptors.request.use(
   async (config) => {
-    // Get token from AsyncStorage using SAME key as authApi
-    const token = await AsyncStorage.getItem('quickfix_access_token'); // Changed from 'access_token'
+    const token = await AsyncStorage.getItem('access_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    console.log(`📤 ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
     return config;
   },
   (error) => {
+    console.error('Request error:', error);
     return Promise.reject(error);
   }
 );
 
-// Response interceptor
-api.interceptors.response.use(
-  (response) => response,
+// Response interceptor to handle token refresh
+axiosInstance.interceptors.response.use(
+  (response) => {
+    console.log(`📥 Response from ${response.config.url}:`, response.status);
+    return response;
+  },
   async (error) => {
     const originalRequest = error.config;
     
-    // Handle 401 Unauthorized (token expired)
+    console.error('Response error:', error.message);
+    if (error.response) {
+      console.error('Error status:', error.response.status);
+      console.error('Error data:', error.response.data);
+    }
+    
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       
       try {
-        const refreshToken = await AsyncStorage.getItem('quickfix_refresh_token'); // Changed from 'refresh_token'
+        const refreshToken = await AsyncStorage.getItem('refresh_token');
         if (refreshToken) {
-          // Try to refresh token
-          const response = await axios.post(
-            `${API_CONFIG.BASE_URL}/auth/token/refresh/`,
-            { refresh: refreshToken }
-          );
+          const response = await axios.post(`${getBaseUrl()}/token/refresh/`, {
+            refresh: refreshToken,
+          });
           
           const { access } = response.data;
-          await AsyncStorage.setItem('quickfix_access_token', access); // Changed from 'access_token'
+          await AsyncStorage.setItem('access_token', access);
           
-          // Retry original request
           originalRequest.headers.Authorization = `Bearer ${access}`;
-          return api(originalRequest);
+          return axiosInstance(originalRequest);
         }
-      } catch {
-        // Refresh failed, clear all auth data
-        await AsyncStorage.multiRemove([
-          'quickfix_access_token',
-          'quickfix_refresh_token',
-          'quickfix_user_data',
-          'access_token',
-          'refresh_token',
-        ]);
-        // You might want to navigate to login screen here
+      } catch (refreshError) {
+        console.error('Token refresh failed:', refreshError);
+        // Refresh failed, redirect to login
+        await AsyncStorage.multiRemove(['access_token', 'refresh_token', 'user']);
+        // You can add navigation logic here if needed
       }
     }
     
@@ -72,4 +81,4 @@ api.interceptors.response.use(
   }
 );
 
-export default api;
+export default axiosInstance;
