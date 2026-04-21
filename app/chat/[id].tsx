@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { chatService, websocketService, Message as APIMessage, Chat, User } from '../../lib/api';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface UIMessage {
   id: string;
@@ -30,40 +30,12 @@ export default function ChatDetailScreen() {
   const [menuVisible, setMenuVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sendingMessage, setSendingMessage] = useState(false);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const flatListRef = useRef<FlatList>(null);
-  const inputRef = useRef<TextInput>(null);
   
   const slideAnim = useRef(new Animated.Value(-300)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   
   const chatId = id as string;
-
-  // Keyboard listeners
-  useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      (e) => {
-        setKeyboardVisible(true);
-        setKeyboardHeight(e.endCoordinates.height);
-        // Scroll to bottom when keyboard opens
-        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-      }
-    );
-    const keyboardDidHideListener = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-      () => {
-        setKeyboardVisible(false);
-        setKeyboardHeight(0);
-      }
-    );
-
-    return () => {
-      keyboardDidShowListener.remove();
-      keyboardDidHideListener.remove();
-    };
-  }, []);
 
   // Load chat data
   useEffect(() => {
@@ -124,6 +96,7 @@ export default function ChatDetailScreen() {
       setChatDetails(chat);
       console.log('Chat details loaded:', chat);
       
+      // Extract other user from participants
       if (chat.chat_type === 'individual' && chat.participants) {
         const otherParticipant = chat.participants.find(p => p.user !== currentUser?.id);
         if (otherParticipant && otherParticipant.user_details) {
@@ -144,6 +117,7 @@ export default function ChatDetailScreen() {
       
       const formattedMessages: UIMessage[] = msgs.map((msg: APIMessage) => {
         const isMe = msg.sender === currentUser?.id;
+        // Get sender name from message details or other user
         let senderName = 'Unknown';
         let senderAvatar = undefined;
         
@@ -151,6 +125,7 @@ export default function ChatDetailScreen() {
           senderName = currentUser?.full_name || currentUser?.mobile_number || 'Me';
           senderAvatar = currentUser?.profile_picture;
         } else {
+          // Try to get name from message sender details
           if (msg.sender_details?.full_name) {
             senderName = msg.sender_details.full_name;
           } else if (msg.sender_details?.mobile_number) {
@@ -240,6 +215,7 @@ export default function ChatDetailScreen() {
     const tempId = Date.now().toString();
     const currentTime = new Date().toISOString();
     
+    // Optimistically add message
     const optimisticMessage: UIMessage = {
       id: tempId,
       message_id: tempId,
@@ -307,6 +283,7 @@ export default function ChatDetailScreen() {
     else if (tab === 'newBroadcast') router.push('/dashboard/broadcast');
   };
 
+  // Render message
   const renderMessage = ({ item, index }: { item: UIMessage; index: number }) => {
     const isMe = item.senderId === currentUser?.id;
     const showSenderName = !isMe && (index === 0 || messages[index - 1]?.senderId !== item.senderId);
@@ -347,6 +324,7 @@ export default function ChatDetailScreen() {
     );
   };
 
+  // Get display name for header
   const getDisplayName = () => {
     if (chatDetails?.chat_type === 'group') {
       return chatDetails.name || 'Group';
@@ -363,6 +341,7 @@ export default function ChatDetailScreen() {
     return 'Unknown';
   };
 
+  // Get display avatar for header
   const getDisplayAvatar = () => {
     if (otherUser?.profile_picture) {
       return otherUser.profile_picture;
@@ -385,7 +364,7 @@ export default function ChatDetailScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       
-      {/* Header */}
+      {/* Header - White Background */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#000000" />
@@ -443,31 +422,26 @@ export default function ChatDetailScreen() {
         </View>
       )}
 
-      {/* Messages List - Add padding bottom when keyboard is visible */}
+      {/* Messages List */}
       <FlatList
         ref={flatListRef}
         data={messages}
         keyExtractor={(item) => item.id}
         renderItem={renderMessage}
-        contentContainerStyle={[
-          styles.messagesContainer,
-          keyboardVisible && { paddingBottom: keyboardHeight + 60 }
-        ]}
+        contentContainerStyle={styles.messagesContainer}
         showsVerticalScrollIndicator={false}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-        onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
       />
 
-      {/* Input Bar - Using KeyboardAvoidingView with proper configuration */}
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-        style={styles.keyboardAvoidingView}
-      >
-        <View style={styles.inputWrapper}>
+      {/* Input Bar */}
+      <View style={styles.inputWrapper}>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+          style={styles.keyboardAvoidingView}
+        >
           <View style={styles.inputContainer}>
             <TextInput
-              ref={inputRef}
               style={styles.input}
               placeholder="Type a message..."
               placeholderTextColor="#999"
@@ -475,8 +449,6 @@ export default function ChatDetailScreen() {
               onChangeText={setMessage}
               multiline
               maxLength={1000}
-              returnKeyType="send"
-              onSubmitEditing={sendMessage}
             />
             
             {message.trim() ? (
@@ -493,30 +465,28 @@ export default function ChatDetailScreen() {
               </TouchableOpacity>
             )}
           </View>
-        </View>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </View>
 
-      {/* Bottom Tab Navigation - Hide when keyboard is visible on Android */}
-      {(!keyboardVisible || Platform.OS === 'ios') && (
-        <View style={styles.bottomTab}>
-          <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('chats')}>
-            <Ionicons name="chatbubbles-outline" size={24} color="#666" />
-            <Text style={styles.tabLabel}>Chats</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('updates')}>
-            <Ionicons name="time-outline" size={24} color="#666" />
-            <Text style={styles.tabLabel}>Updates</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('profile')}>
-            <Ionicons name="person-outline" size={24} color="#666" />
-            <Text style={styles.tabLabel}>Profile</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('newBroadcast')}>
-            <Ionicons name="megaphone-outline" size={24} color="#666" />
-            <Text style={styles.tabLabel}>Broadcast</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      {/* Bottom Tab Navigation */}
+      <View style={styles.bottomTab}>
+        <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('chats')}>
+          <Ionicons name="chatbubbles-outline" size={24} color="#666" />
+          <Text style={styles.tabLabel}>Chats</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('updates')}>
+          <Ionicons name="time-outline" size={24} color="#666" />
+          <Text style={styles.tabLabel}>Updates</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('profile')}>
+          <Ionicons name="person-outline" size={24} color="#666" />
+          <Text style={styles.tabLabel}>Profile</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('newBroadcast')}>
+          <Ionicons name="megaphone-outline" size={24} color="#666" />
+          <Text style={styles.tabLabel}>Broadcast</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -533,7 +503,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   
-  // Header Styles
+  // Header Styles - White Background
   header: {
     backgroundColor: '#FFFFFF',
     flexDirection: 'row',
@@ -548,7 +518,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
-    zIndex: 10,
   },
   backButton: {
     padding: 4,
@@ -727,17 +696,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#666',
   },
   
-  // Input Bar - Keyboard Avoiding
-  keyboardAvoidingView: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-  },
+  // Input Bar
   inputWrapper: {
     backgroundColor: '#fff',
     borderTopWidth: 0.5,
     borderTopColor: '#e0e0e0',
+  },
+  keyboardAvoidingView: {
+    backgroundColor: '#fff',
   },
   inputContainer: {
     flexDirection: 'row',
@@ -773,10 +739,6 @@ const styles = StyleSheet.create({
     borderTopColor: '#e0e0e0',
     paddingVertical: 8,
     paddingBottom: Platform.OS === 'ios' ? 28 : 76,
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
   },
   tabItem: {
     flex: 1,

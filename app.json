@@ -34,7 +34,15 @@
         "android.permission.ACCESS_NETWORK_STATE",
         "android.permission.READ_CONTACTS",
         "android.permission.SEND_SMS",
-        "android.permission.READ_SMS"
+        "android.permission.READ_SMS",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.ACCESS_MEDIA_LOCATION",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.WRITE_CONTACTS"
       ],
       "package": "com.anonymous.AutoFix"
     },
@@ -56,10 +64,7 @@
           }
         }
       ],
-
-
-
-            [
+      [
         "expo-media-library",
         {
           "photosPermission": "Allow $(PRODUCT_NAME) to access your photos to save QR codes.",
@@ -108,9 +113,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "98ef3a7c-3ec3-47c6-8258-5388275e10cf"
+        "projectId": "a0c0c1bc-418b-4d92-ae48-71d33e975b45"
       }
     },
-    "owner": "quickfix-plan"
+    "owner": "ellysabbath28"
   }
 }
