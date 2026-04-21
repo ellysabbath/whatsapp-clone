@@ -1,199 +1,133 @@
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, TextInput, Platform, Alert, PermissionsAndroid, ActivityIndicator } from 'react-native';
+import { View, Text,RefreshControl, FlatList, TouchableOpacity, StyleSheet, Image, TextInput, Platform, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import * as Contacts from 'expo-contacts';
-import * as SMS from 'expo-sms';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { chatService } from '../../../lib/api/services/chat.service';
+ 
+interface AppUser {
+  id: number;
+  mobile_number: string;
+  full_name: string;
+  profile_picture?: string;
+  is_online?: boolean;
+}
 
-interface Contact {
-  id: string;
-  name: string;
-  phoneNumbers?: { number: string; label?: string }[];
-  image?: string;
+interface UserWithChatStatus extends AppUser {
+  hasExistingChat: boolean;
+  chatId?: string;
 }
 
 export default function ContactScreen() {
   const router = useRouter();
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [filteredContacts, setFilteredContacts] = useState<Contact[]>([]);
+  const [users, setUsers] = useState<UserWithChatStatus[]>([]);
+  const [filteredUsers, setFilteredUsers] = useState<UserWithChatStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [permissionGranted, setPermissionGranted] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
-
-  const PAGE_SIZE = 50; // Load 50 contacts at a time
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    requestPermissionsAndLoadContacts();
+    loadUsers();
   }, []);
 
-  const requestPermissionsAndLoadContacts = async () => {
+  const loadUsers = async () => {
     try {
-      if (Platform.OS === 'android') {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.READ_CONTACTS,
-          {
-            title: 'Contacts Permission',
-            message: 'ApTec needs access to your contacts to show them here',
-            buttonNeutral: 'Ask Me Later',
-            buttonNegative: 'Cancel',
-            buttonPositive: 'OK',
+      setLoading(true);
+      
+      // Fetch all users from backend
+      const token = await AsyncStorage.getItem('access_token');
+      const response = await fetch('http://192.168.137.1:8000/api/users/all/', {
+        method: 'GET',
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : '',
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      if (response.ok) {
+        const allUsers: AppUser[] = await response.json();
+        
+        // Get current user ID
+        const userStr = await AsyncStorage.getItem('user');
+        const currentUser = userStr ? JSON.parse(userStr) : null;
+        
+        // Filter out current user
+        const otherUsers = allUsers.filter(user => user.id !== currentUser?.id);
+        
+        // Get existing chats to check which users already have chats
+        const chats = await chatService.getChats();
+        const userChatMap = new Map<number, string>();
+        
+        chats.forEach(chat => {
+          if (chat.chat_type === 'individual' && chat.other_participant) {
+            userChatMap.set(chat.other_participant.id, chat.chat_id);
           }
-        );
-        if (granted === PermissionsAndroid.RESULTS.GRANTED) {
-          await loadContactsPaginated(0);
-        } else {
-          Alert.alert(
-            'Permission Required',
-            'Please grant contacts permission to see your contacts',
-            [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Open Settings', onPress: () => openSettings() }
-            ]
-          );
-          setLoading(false);
-        }
-      } else {
-        const { status } = await Contacts.requestPermissionsAsync();
-        if (status === 'granted') {
-          await loadContactsPaginated(0);
-        } else {
-          Alert.alert(
-            'Permission Required',
-            'Please grant contacts permission to see your contacts'
-          );
-          setLoading(false);
-        }
-      }
-    } catch (error) {
-      console.error('Error requesting permission:', error);
-      setLoading(false);
-    }
-  };
-
-  const loadContactsPaginated = async (pageNum: number) => {
-    try {
-      if (pageNum === 0) {
-        setLoading(true);
-      } else {
-        setLoadingMore(true);
-      }
-
-      const { status } = await Contacts.requestPermissionsAsync();
-      if (status === 'granted') {
-        // Get total count first
-        const { data: allContacts } = await Contacts.getContactsAsync({
-          fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers],
         });
-
-        const validContacts = allContacts
-          .filter(contact => contact.name && contact.phoneNumbers && contact.phoneNumbers.length > 0)
-          .map(contact => ({
-            id: contact.id,
-            name: contact.name || 'Unknown',
-            phoneNumbers: contact.phoneNumbers?.slice(0, 1), // Only take first phone number for speed
-          }))
-          .sort((a, b) => a.name.localeCompare(b.name));
-
-        // Paginate
-        const start = pageNum * PAGE_SIZE;
-        const end = start + PAGE_SIZE;
-        const paginatedContacts = validContacts.slice(start, end);
-
-        if (pageNum === 0) {
-          setContacts(paginatedContacts);
-          setFilteredContacts(paginatedContacts);
-        } else {
-          setContacts(prev => [...prev, ...paginatedContacts]);
-          setFilteredContacts(prev => [...prev, ...paginatedContacts]);
-        }
-
-        setHasMore(end < validContacts.length);
-        setPermissionGranted(true);
+        
+        // Add chat status to users
+        const usersWithChatStatus: UserWithChatStatus[] = otherUsers.map(user => ({
+          ...user,
+          hasExistingChat: userChatMap.has(user.id),
+          chatId: userChatMap.get(user.id),
+        }));
+        
+        // Sort alphabetically by name
+        usersWithChatStatus.sort((a, b) => 
+          (a.full_name || a.mobile_number).localeCompare(b.full_name || b.mobile_number)
+        );
+        
+        setUsers(usersWithChatStatus);
+        setFilteredUsers(usersWithChatStatus);
+        console.log(`Loaded ${usersWithChatStatus.length} users from database`);
+      } else {
+        console.error('Failed to load users:', response.status);
+        Alert.alert('Error', 'Failed to load users');
       }
     } catch (error) {
-      console.error('Error loading contacts:', error);
-      Alert.alert('Error', 'Failed to load contacts');
+      console.error('Error loading users:', error);
+      Alert.alert('Error', 'Failed to load users');
     } finally {
       setLoading(false);
-      setLoadingMore(false);
+      setRefreshing(false);
     }
   };
 
-  const loadMoreContacts = () => {
-    if (!loadingMore && hasMore) {
-      loadContactsPaginated(page + 1);
-      setPage(prev => prev + 1);
-    }
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadUsers();
   };
 
-  // Optimized search with debouncing
   const handleSearch = useCallback((text: string) => {
     setSearchQuery(text);
     
     if (text.trim() === '') {
-      setFilteredContacts(contacts);
+      setFilteredUsers(users);
     } else {
-      // Use requestIdleCallback for better performance on large lists
       const searchLower = text.toLowerCase();
-      const filtered = contacts.filter(contact =>
-        contact.name.toLowerCase().includes(searchLower) ||
-        contact.phoneNumbers?.some(phone => phone.number.includes(searchLower))
+      const filtered = users.filter(user =>
+        (user.full_name && user.full_name.toLowerCase().includes(searchLower)) ||
+        user.mobile_number.includes(searchLower)
       );
-      setFilteredContacts(filtered);
+      setFilteredUsers(filtered);
     }
-  }, [contacts]);
+  }, [users]);
 
-  // Debounced search
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (searchQuery.trim() === '') {
-        setFilteredContacts(contacts);
+  const startChat = async (user: UserWithChatStatus) => {
+    try {
+      if (user.hasExistingChat && user.chatId) {
+        // Navigate to existing chat
+        router.push(`/chat/${user.chatId}`);
       } else {
-        const searchLower = searchQuery.toLowerCase();
-        const filtered = contacts.filter(contact =>
-          contact.name.toLowerCase().includes(searchLower) ||
-          contact.phoneNumbers?.some(phone => phone.number.includes(searchLower))
-        );
-        setFilteredContacts(filtered);
+        // Create new chat
+        const newChat = await chatService.createChat({
+          participant_ids: [user.id],
+          chat_type: 'individual'
+        });
+        router.push(`/chat/${newChat.chat_id}`);
       }
-    }, 300);
-    
-    return () => clearTimeout(timeoutId);
-  }, [searchQuery, contacts]);
-
-  const handleContactPress = async (contact: Contact) => {
-    const phoneNumber = contact.phoneNumbers?.[0]?.number;
-    if (!phoneNumber) {
-      Alert.alert('Error', 'No phone number found for this contact');
-      return;
-    }
-
-    const isAvailable = await SMS.isAvailableAsync();
-    if (isAvailable) {
-      router.push({
-        pathname: `/chat/${contact.id}`,
-        params: { 
-          name: contact.name,
-          phone: phoneNumber.replace(/\s/g, '')
-        }
-      });
-    } else {
-      Alert.alert('Error', 'SMS is not available on this device');
-    }
-  };
-
-  const handleInviteFriend = async () => {
-    const isAvailable = await SMS.isAvailableAsync();
-    if (isAvailable) {
-      await SMS.sendSMSAsync(
-        [],
-        'Hey! I\'m using ApTec - the best messaging app. Join me here!'
-      );
-    } else {
-      Alert.alert('Error', 'SMS is not available on this device');
+    } catch (error) {
+      console.error('Error starting chat:', error);
+      Alert.alert('Error', 'Failed to start chat');
     }
   };
 
@@ -207,31 +141,43 @@ export default function ContactScreen() {
     return colors[index];
   };
 
-  const renderContact = useCallback(({ item }: { item: Contact }) => (
+  const renderUser = useCallback(({ item }: { item: UserWithChatStatus }) => (
     <TouchableOpacity 
-      style={styles.contactItem}
-      onPress={() => handleContactPress(item)}
+      style={styles.userItem}
+      onPress={() => startChat(item)}
       activeOpacity={0.7}
     >
       <View style={styles.avatarContainer}>
-        <View style={[styles.defaultAvatar, { backgroundColor: getRandomColor(item.name) }]}>
-          <Text style={styles.avatarText}>
-            {getInitials(item.name)}
-          </Text>
-        </View>
-      </View>
-      
-      <View style={styles.contactInfo}>
-        <Text style={styles.contactName}>{item.name}</Text>
-        {item.phoneNumbers && item.phoneNumbers[0] && (
-          <Text style={styles.phoneNumber} numberOfLines={1}>
-            {item.phoneNumbers[0].label && `${item.phoneNumbers[0].label}: `}
-            {item.phoneNumbers[0].number}
-          </Text>
+        {item.profile_picture ? (
+          <Image source={{ uri: item.profile_picture }} style={styles.avatar} />
+        ) : (
+          <View style={[styles.defaultAvatar, { backgroundColor: getRandomColor(item.full_name || item.mobile_number) }]}>
+            <Text style={styles.avatarText}>
+              {getInitials(item.full_name || item.mobile_number)}
+            </Text>
+          </View>
+        )}
+        {item.is_online && (
+          <View style={styles.onlineBadge} />
         )}
       </View>
       
-      <Ionicons name="chatbubble-outline" size={22} color="#25D366" />
+      <View style={styles.userInfo}>
+        <Text style={styles.userName}>
+          {item.full_name || item.mobile_number}
+        </Text>
+        <Text style={styles.phoneNumber} numberOfLines={1}>
+          {item.mobile_number}
+        </Text>
+      </View>
+      
+      <View style={styles.chatButton}>
+        {item.hasExistingChat ? (
+          <Ionicons name="chatbubble" size={22} color="#25D366" />
+        ) : (
+          <Ionicons name="chatbubble-outline" size={22} color="#25D366" />
+        )}
+      </View>
     </TouchableOpacity>
   ), []);
 
@@ -241,15 +187,17 @@ export default function ContactScreen() {
     </View>
   );
 
-  // Memoize grouped contacts for better performance
-  const groupedContacts = useMemo(() => {
-    const grouped: { [key: string]: Contact[] } = {};
-    filteredContacts.forEach(contact => {
-      const firstLetter = contact.name.charAt(0).toUpperCase();
+  // Group users by first letter of name
+  const groupedUsers = useMemo(() => {
+    const grouped: { [key: string]: UserWithChatStatus[] } = {};
+    
+    filteredUsers.forEach(user => {
+      const name = user.full_name || user.mobile_number;
+      const firstLetter = name.charAt(0).toUpperCase();
       if (!grouped[firstLetter]) {
         grouped[firstLetter] = [];
       }
-      grouped[firstLetter].push(contact);
+      grouped[firstLetter].push(user);
     });
     
     return Object.keys(grouped)
@@ -258,23 +206,13 @@ export default function ContactScreen() {
         title: letter,
         data: grouped[letter]
       }));
-  }, [filteredContacts]);
-
-  const renderFooter = () => {
-    if (!loadingMore) return null;
-    return (
-      <View style={styles.footerLoader}>
-        <ActivityIndicator size="small" color="#25D366" />
-        <Text style={styles.footerText}>Loading more contacts...</Text>
-      </View>
-    );
-  };
+  }, [filteredUsers]);
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#25D366" />
-        <Text style={styles.loadingText}>Loading contacts...</Text>
+        <Text style={styles.loadingText}>Loading ApTec users...</Text>
       </View>
     );
   }
@@ -286,10 +224,8 @@ export default function ContactScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#0B150D" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Select Contact</Text>
-        <TouchableOpacity onPress={handleInviteFriend} style={styles.inviteButton}>
-          <Ionicons name="person-add-outline" size={24} color="#09110A" />
-        </TouchableOpacity>
+        <Text style={styles.headerTitle}>ApTec Users</Text>
+        <View style={styles.placeholder} />
       </View>
 
       {/* Search Bar */}
@@ -297,7 +233,7 @@ export default function ContactScreen() {
         <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search contacts..."
+          placeholder="Search users by name or phone..."
           placeholderTextColor="#666"
           value={searchQuery}
           onChangeText={handleSearch}
@@ -310,46 +246,33 @@ export default function ContactScreen() {
         )}
       </View>
 
-      {/* New Chat Button */}
-      <TouchableOpacity style={styles.newChatButton}>
-        <Ionicons name="chatbubble-ellipses-outline" size={20} color="#25D366" />
-        <Text style={styles.newChatText}>New chat</Text>
-      </TouchableOpacity>
+      {/* Stats Bar */}
+      <View style={styles.statsBar}>
+        <Text style={styles.statsText}>
+          {filteredUsers.length} user{filteredUsers.length !== 1 ? 's' : ''} found
+        </Text>
+      </View>
 
-      {/* Contacts List */}
-      {!permissionGranted ? (
+      {/* Users List */}
+      {filteredUsers.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="people-outline" size={80} color="#ddd" />
-          <Text style={styles.emptyText}>No contacts access</Text>
+          <Text style={styles.emptyText}>No users found</Text>
           <Text style={styles.emptySubtext}>
-            Please grant contacts permission to see your contacts
-          </Text>
-          <TouchableOpacity 
-            style={styles.permissionButton}
-            onPress={requestPermissionsAndLoadContacts}
-          >
-            <Text style={styles.permissionButtonText}>Grant Permission</Text>
-          </TouchableOpacity>
-        </View>
-      ) : filteredContacts.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="people-outline" size={80} color="#ddd" />
-          <Text style={styles.emptyText}>No contacts found</Text>
-          <Text style={styles.emptySubtext}>
-            {searchQuery ? 'Try a different search' : 'Add contacts to start chatting'}
+            {searchQuery ? 'Try a different search' : 'No other users on ApTec yet'}
           </Text>
         </View>
       ) : (
         <FlatList
-          data={groupedContacts}
+          data={groupedUsers}
           keyExtractor={(item) => item.title}
           renderItem={({ item }) => (
             <>
               {renderSectionHeader(item.title)}
               <FlatList
                 data={item.data}
-                keyExtractor={(contact) => contact.id}
-                renderItem={renderContact}
+                keyExtractor={(user) => user.id.toString()}
+                renderItem={renderUser}
                 scrollEnabled={false}
                 removeClippedSubviews={true}
                 initialNumToRender={20}
@@ -359,14 +282,10 @@ export default function ContactScreen() {
             </>
           )}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.contactsList}
-          onEndReached={loadMoreContacts}
-          onEndReachedThreshold={0.1}
-          ListFooterComponent={renderFooter}
-          removeClippedSubviews={true}
-          initialNumToRender={10}
-          maxToRenderPerBatch={15}
-          windowSize={10}
+          contentContainerStyle={styles.usersList}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
           stickySectionHeadersEnabled={true}
         />
       )}
@@ -407,8 +326,8 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#061C0F',
   },
-  inviteButton: {
-    padding: 4,
+  placeholder: {
+    width: 32,
   },
   searchContainer: {
     flexDirection: 'row',
@@ -428,22 +347,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#000',
   },
-  newChatButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  statsBar: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
+    paddingVertical: 8,
+    backgroundColor: '#f8f8f8',
     borderBottomWidth: 0.5,
     borderBottomColor: '#e0e0e0',
-    gap: 12,
   },
-  newChatText: {
-    fontSize: 16,
-    color: '#25D366',
-    fontWeight: '500',
+  statsText: {
+    fontSize: 12,
+    color: '#666',
   },
-  contactsList: {
+  usersList: {
     paddingBottom: 20,
   },
   sectionHeader: {
@@ -456,7 +371,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#666',
   },
-  contactItem: {
+  userItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
@@ -465,6 +380,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f0f0f0',
   },
   avatarContainer: {
+    position: 'relative',
     marginRight: 12,
   },
   avatar: {
@@ -484,10 +400,21 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#fff',
   },
-  contactInfo: {
+  onlineBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#25D366',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  userInfo: {
     flex: 1,
   },
-  contactName: {
+  userName: {
     fontSize: 16,
     fontWeight: '500',
     color: '#000',
@@ -496,6 +423,9 @@ const styles = StyleSheet.create({
   phoneNumber: {
     fontSize: 13,
     color: '#666',
+  },
+  chatButton: {
+    padding: 8,
   },
   emptyContainer: {
     flex: 1,
@@ -514,27 +444,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
   },
-  permissionButton: {
-    marginTop: 20,
-    backgroundColor: '#25D366',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
-  permissionButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  footerLoader: {
-    paddingVertical: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 10,
-  },
-  footerText: {
-    fontSize: 14,
-    color: '#666',
-  },
 });
+
+// Add RefreshControl import at the top

@@ -1,15 +1,16 @@
 // API Configuration
 export const API_CONFIG = {
   // For Android Emulator
-  // BASE_URL: 'http://10.0.2.2:8000/api',
+  // BASE_URL: 'http://10.0.2.2:8000/api/',
   
-  // For iOS Simulator, use:
-  // BASE_URL: 'http://localhost:8000/api',
+  // For iOS Simulator
+  // BASE_URL: 'http://localhost:8000/api/',
   
   // For Physical Device (replace with your computer's IP)
-  BASE_URL: 'http://192.168.137.1:8000/api',
+  BASE_URL: 'http://192.168.137.1:8000/api/',
   
- TIMEOUT: 30000,
+  TIMEOUT: 30000,
+  
   ENDPOINTS: {
     // Registration endpoints
     CHECK_PHONE: '/register/check-phone/',
@@ -27,6 +28,37 @@ export const API_CONFIG = {
     UPDATE_PROFILE_PICTURE: '/profile/update-picture/',
     DELETE_PROFILE_FIELD: '/profile/field/',
     DELETE_ACCOUNT: '/profile/delete-account/',
+    
+    // Chat endpoints
+    CHATS: '/chats/',
+    ARCHIVED_CHATS: '/chats/archive/',
+    MESSAGES: '/chats/:chatId/messages/',
+    TYPING_STATUS: '/messages/typing/',
+    MESSAGE_STATUS: '/messages/status/',
+    REACTIONS: '/messages/reaction/',
+    STARRED: '/starred/',
+    SEARCH: '/search/',
+    
+    // Contact endpoints
+    CONTACTS: '/contacts/',
+    BLOCK_CONTACT: '/contacts/:contactId/block/',
+    
+    // Group endpoints
+    CREATE_GROUP: '/groups/create/',
+    GROUP_DETAILS: '/groups/:chatId/',
+    ADD_PARTICIPANTS: '/groups/:chatId/add-participants/',
+    REMOVE_PARTICIPANT: '/groups/:chatId/remove/:userId/',
+    GROUP_INVITES: '/groups/:chatId/invites/',
+    JOIN_GROUP: '/groups/join/',
+    
+    // Call endpoints
+    INITIATE_CALL: '/calls/initiate/',
+    CALL_STATUS: '/calls/:callId/status/',
+    CALL_HISTORY: '/calls/history/',
+    
+    // Broadcast endpoints
+    BROADCASTS: '/broadcasts/',
+    SEND_BROADCAST: '/broadcasts/send/',
   }
 };
 
