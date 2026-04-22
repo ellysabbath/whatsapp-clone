@@ -1,8 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getWebSocketUrl } from '../axiosInstance';
+import { Platform } from 'react-native';
 
 type WebSocketEventType =
   | 'message'
+  | 'new_message'
   | 'typing'
   | 'read_receipt'
   | 'delivered_receipt'
@@ -11,7 +13,9 @@ type WebSocketEventType =
   | 'user_status'
   | 'incoming_call'
   | 'call_status_update'
-  | 'new_message';
+  | 'connect'
+  | 'disconnect'
+  | 'pong';
 
 interface WebSocketEvent {
   type: WebSocketEventType;
@@ -24,62 +28,73 @@ class WebSocketService {
   private ws: WebSocket | null = null;
   private eventHandlers: Map<WebSocketEventType, Set<EventHandler>> = new Map();
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
-  private reconnectDelay = 3000;
+  private maxReconnectAttempts = 10;
+  private reconnectDelay = 2000;
   private pingInterval: NodeJS.Timeout | null = null;
   private chatId: string | null = null;
   private userId: number | null = null;
+  private isConnecting = false;
+  private connectionStatusListeners: Set<(connected: boolean) => void> = new Set();
 
-  async connectToChat(chatId: string): Promise<void> {
+  async connectToChat(chatId: string): Promise<boolean> {
+    if (this.isConnecting) {
+      console.log('⏳ Already connecting, waiting...');
+      return false;
+    }
+    
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      console.log('✅ WebSocket already connected');
+      return true;
+    }
+    
     this.disconnect();
     this.chatId = chatId;
+    this.isConnecting = true;
     
     const token = await this.getToken();
     if (!token) {
-      console.error('No token available for WebSocket connection');
-      return;
+      console.error('❌ No token available for WebSocket connection');
+      this.isConnecting = false;
+      return false;
     }
     
-    // Construct the WebSocket URL with token as query parameter
     const wsPath = `ws/chat/${chatId}/`;
     const wsUrl = getWebSocketUrl(wsPath);
     const fullUrl = `${wsUrl}?token=${token}`;
     
     console.log('🔌 Connecting to WebSocket:', fullUrl);
-    this.connect(fullUrl);
+    console.log('📱 Platform:', Platform.OS);
+    
+    return new Promise((resolve) => {
+      this.connect(fullUrl, resolve);
+    });
   }
 
-  async connectToUser(userId: number): Promise<void> {
-    this.disconnect();
-    this.userId = userId;
-    
-    const token = await this.getToken();
-    if (!token) {
-      console.error('No token available for WebSocket connection');
-      return;
-    }
-    
-    // For user-specific notifications (if you implement this consumer)
-    const wsPath = `ws/user/${userId}/`;
-    const wsUrl = getWebSocketUrl(wsPath);
-    const fullUrl = `${wsUrl}?token=${token}`;
-    
-    console.log('🔌 Connecting to User WebSocket:', fullUrl);
-    this.connect(fullUrl);
-  }
-
-  private async getToken(): Promise<string | null> {
-    return await AsyncStorage.getItem('access_token');
-  }
-
-  private connect(url: string): void {
+  private connect(url: string, onComplete?: (success: boolean) => void): void {
     try {
       this.ws = new WebSocket(url);
       
+      const connectionTimeout = setTimeout(() => {
+        if (this.ws?.readyState !== WebSocket.OPEN) {
+          console.log('❌ Connection timeout');
+          this.ws?.close();
+          this.isConnecting = false;
+          if (onComplete) onComplete(false);
+        }
+      }, 5000);
+      
       this.ws.onopen = () => {
+        clearTimeout(connectionTimeout);
         console.log('✅ WebSocket connected successfully');
         this.reconnectAttempts = 0;
+        this.isConnecting = false;
         this.startPingInterval();
+        
+        // Emit connection event
+        this.handleEvent({ type: 'connect' });
+        this.connectionStatusListeners.forEach(listener => listener(true));
+        
+        if (onComplete) onComplete(true);
       };
       
       this.ws.onmessage = (event) => {
@@ -94,15 +109,26 @@ class WebSocketService {
       
       this.ws.onerror = (error) => {
         console.error('❌ WebSocket error:', error);
+        this.isConnecting = false;
+        if (onComplete) onComplete(false);
       };
       
       this.ws.onclose = (event) => {
+        clearTimeout(connectionTimeout);
         console.log('🔌 WebSocket disconnected:', event.code, event.reason);
         this.stopPingInterval();
-        this.attemptReconnect();
+        this.isConnecting = false;
+        this.connectionStatusListeners.forEach(listener => listener(false));
+        this.handleEvent({ type: 'disconnect' });
+        
+        if (event.code !== 1000) {
+          this.attemptReconnect();
+        }
       };
     } catch (error) {
       console.error('Error creating WebSocket:', error);
+      this.isConnecting = false;
+      if (onComplete) onComplete(false);
       this.attemptReconnect();
     }
   }
@@ -122,7 +148,37 @@ class WebSocketService {
       }, delay);
     } else {
       console.log('❌ Max reconnection attempts reached');
+      this.connectionStatusListeners.forEach(listener => listener(false));
     }
+  }
+
+  private async getToken(): Promise<string | null> {
+    try {
+      const token = await AsyncStorage.getItem('access_token');
+      console.log('🔑 Token available:', !!token);
+      return token;
+    } catch (error) {
+      console.error('Error getting token:', error);
+      return null;
+    }
+  }
+
+  async connectToUser(userId: number): Promise<void> {
+    this.disconnect();
+    this.userId = userId;
+    
+    const token = await this.getToken();
+    if (!token) {
+      console.error('No token available for WebSocket connection');
+      return;
+    }
+    
+    const wsPath = `ws/user/${userId}/`;
+    const wsUrl = getWebSocketUrl(wsPath);
+    const fullUrl = `${wsUrl}?token=${token}`;
+    
+    console.log('🔌 Connecting to User WebSocket:', fullUrl);
+    this.connect(fullUrl);
   }
 
   private startPingInterval(): void {
@@ -156,6 +212,13 @@ class WebSocketService {
     
     return () => {
       this.eventHandlers.get(eventType)?.delete(handler);
+    };
+  }
+
+  onConnectionStatus(listener: (connected: boolean) => void): () => void {
+    this.connectionStatusListeners.add(listener);
+    return () => {
+      this.connectionStatusListeners.delete(listener);
     };
   }
 
@@ -218,12 +281,13 @@ class WebSocketService {
     console.log('🔌 Disconnecting WebSocket');
     this.stopPingInterval();
     if (this.ws) {
-      this.ws.close();
+      this.ws.close(1000, 'Normal closure');
       this.ws = null;
     }
     this.chatId = null;
     this.userId = null;
     this.reconnectAttempts = 0;
+    this.isConnecting = false;
   }
 
   isConnected(): boolean {

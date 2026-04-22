@@ -1,3 +1,4 @@
+// lib/api/services/group.service.ts
 import axiosInstance from '../axiosInstance';
 import {
   Chat,
@@ -11,7 +12,7 @@ import {
 class GroupService {
   async createGroup(data: CreateGroupData): Promise<Chat> {
     try {
-      const response = await axiosInstance.post<Chat>('groups/create/', data);
+      const response = await axiosInstance.post<Chat>('/groups/create/', data);
       return response.data;
     } catch (error: any) {
       throw this.handleError(error);
@@ -20,7 +21,7 @@ class GroupService {
 
   async getGroupDetails(chatId: string): Promise<Group> {
     try {
-      const response = await axiosInstance.get<Group>(`groups/${chatId}/`);
+      const response = await axiosInstance.get<Group>(`/groups/${chatId}/`);
       return response.data;
     } catch (error: any) {
       throw this.handleError(error);
@@ -29,7 +30,7 @@ class GroupService {
 
   async updateGroup(chatId: string, data: UpdateGroupData): Promise<Group> {
     try {
-      const response = await axiosInstance.patch<Group>(`groups/${chatId}/`, data);
+      const response = await axiosInstance.patch<Group>(`/groups/${chatId}/`, data);
       return response.data;
     } catch (error: any) {
       throw this.handleError(error);
@@ -38,7 +39,7 @@ class GroupService {
 
   async addParticipants(chatId: string, participantIds: number[]): Promise<{ added_participants: number[] }> {
     try {
-      const response = await axiosInstance.post(`groups/${chatId}/add-participants/`, {
+      const response = await axiosInstance.post(`/groups/${chatId}/add-participants/`, {
         participant_ids: participantIds,
       });
       return response.data;
@@ -49,7 +50,7 @@ class GroupService {
 
   async removeParticipant(chatId: string, userId: number): Promise<void> {
     try {
-      await axiosInstance.delete(`groups/${chatId}/remove/${userId}/`);
+      await axiosInstance.delete(`/groups/${chatId}/remove/${userId}/`);
     } catch (error: any) {
       throw this.handleError(error);
     }
@@ -57,7 +58,7 @@ class GroupService {
 
   async createInvite(chatId: string, maxUses: number = 0, expiresAt?: string): Promise<GroupInvite> {
     try {
-      const response = await axiosInstance.post<GroupInvite>(`groups/${chatId}/invites/`, {
+      const response = await axiosInstance.post<GroupInvite>(`/groups/${chatId}/invites/`, {
         max_uses: maxUses,
         expires_at: expiresAt,
       });
@@ -69,7 +70,7 @@ class GroupService {
 
   async getInvites(chatId: string): Promise<GroupInvite[]> {
     try {
-      const response = await axiosInstance.get<GroupInvite[]>(`groups/${chatId}/invites/`);
+      const response = await axiosInstance.get<GroupInvite[]>(`/groups/${chatId}/invites/`);
       return response.data;
     } catch (error: any) {
       throw this.handleError(error);
@@ -78,7 +79,7 @@ class GroupService {
 
   async joinGroup(inviteCode: string): Promise<Chat> {
     try {
-      const response = await axiosInstance.post<Chat>('groups/join/', { invite_code: inviteCode });
+      const response = await axiosInstance.post<Chat>('/groups/join/', { invite_code: inviteCode });
       return response.data;
     } catch (error: any) {
       throw this.handleError(error);
@@ -87,7 +88,7 @@ class GroupService {
 
   async leaveGroup(chatId: string): Promise<void> {
     try {
-      await axiosInstance.delete(`chats/${chatId}/`);
+      await axiosInstance.delete(`/chats/${chatId}/`);
     } catch (error: any) {
       throw this.handleError(error);
     }

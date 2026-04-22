@@ -14,6 +14,7 @@ interface UIChat {
   id: string;
   chat_id: string;
   name: string;
+  phoneNumber: string;
   message: string;
   time: string;
   avatar: string;
@@ -26,6 +27,7 @@ interface UIChat {
   blocked: boolean;
   archived: boolean;
   lastMessageTime: Date;
+  otherUserId?: number;
 }
 
 export default function ChatsScreen() {
@@ -52,17 +54,14 @@ export default function ChatsScreen() {
       return defaultAvatar;
     }
     
-    // Base64 image
     if (imageUrl.startsWith('data:image')) {
       return imageUrl;
     }
     
-    // Full URL
     if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
       return imageUrl;
     }
     
-    // Relative path starting with /
     if (imageUrl.startsWith('/')) {
       return `${API_BASE_URL}${imageUrl}`;
     }
@@ -96,6 +95,7 @@ export default function ChatsScreen() {
       const userStr = await AsyncStorage.getItem('user');
       if (userStr) {
         setCurrentUser(JSON.parse(userStr));
+        console.log('Current user loaded:', JSON.parse(userStr));
       }
     } catch (error) {
       console.error('Error loading current user:', error);
@@ -131,36 +131,39 @@ export default function ChatsScreen() {
     try {
       setRefreshing(true);
       const response = await chatService.getChats();
+      console.log('Chats response:', response.length);
       
       const formattedChats: UIChat[] = response.map(chat => {
         let displayName = 'Unknown';
+        let displayPhone = '';
         let displayAvatar = 'https://randomuser.me/api/portraits/lego/1.jpg';
         let isOnline = false;
+        let otherUserId = null;
         
         if (chat.chat_type === 'individual') {
-          // Get other user info
           let otherUser = null;
           
-          // From other_participant field
           if (chat.other_participant) {
             otherUser = chat.other_participant;
-          }
-          // From participants list
-          else if (chat.participants && chat.participants.length > 0) {
+            otherUserId = otherUser.id;
+          } else if (chat.participants && chat.participants.length > 0) {
             const found = chat.participants.find(p => p.user !== currentUser?.id);
             if (found && found.user_details) {
               otherUser = found.user_details;
+              otherUserId = otherUser.id;
             }
           }
           
           if (otherUser) {
-            displayName = otherUser.name || otherUser.full_name || otherUser.mobile_number || 'Unknown';
+            displayName = otherUser.full_name || otherUser.name || otherUser.mobile_number || 'Unknown';
+            displayPhone = otherUser.mobile_number || '';
+            // IMPORTANT: Get profile picture from user_details
             const profilePic = otherUser.profile_picture || otherUser.avatar;
             displayAvatar = getValidImageUrl(profilePic);
-            isOnline = otherUser.online || otherUser.is_online || false;
+            isOnline = otherUser.is_online || otherUser.online || false;
+            console.log(`User ${displayName} avatar:`, profilePic);
           }
         } else {
-          // Group chat
           displayName = chat.name || 'Group';
           displayAvatar = getValidImageUrl(chat.avatar);
         }
@@ -169,6 +172,7 @@ export default function ChatsScreen() {
           id: chat.chat_id,
           chat_id: chat.chat_id,
           name: displayName,
+          phoneNumber: displayPhone,
           message: chat.last_message?.content || 'No messages yet',
           time: formatTime(chat.last_message?.created_at || chat.updated_at),
           avatar: displayAvatar,
@@ -181,10 +185,12 @@ export default function ChatsScreen() {
           blocked: false,
           archived: chat.is_archived,
           lastMessageTime: new Date(chat.last_message?.created_at || chat.updated_at),
+          otherUserId: otherUserId,
         };
       });
       
       setChats(formattedChats);
+      console.log('Formatted chats:', formattedChats.length);
     } catch (error: any) {
       console.error('Error loading chats:', error);
     } finally {
@@ -218,7 +224,8 @@ export default function ChatsScreen() {
     
     if (searchQuery) {
       filtered = filtered.filter(chat => 
-        chat.name.toLowerCase().includes(searchQuery.toLowerCase())
+        chat.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        chat.phoneNumber.includes(searchQuery)
       );
     }
     
@@ -239,10 +246,24 @@ export default function ChatsScreen() {
   };
 
   const updateChat = (chatId: string, updates: Partial<UIChat>) => {
-    const updatedChats = chats.map(chat => 
+    setChats(prevChats => prevChats.map(chat => 
       chat.chat_id === chatId ? { ...chat, ...updates } : chat
-    );
-    setChats(updatedChats);
+    ));
+  };
+
+  // Function to mark messages as read when clicking on chat
+  const markChatAsRead = async (chatId: string) => {
+    try {
+      // Find the chat
+      const chat = chats.find(c => c.chat_id === chatId);
+      if (chat && chat.unread > 0) {
+        // Update local state immediately for UI response
+        updateChat(chatId, { unread: 0 });
+        console.log(`Marked chat ${chatId} as read`);
+      }
+    } catch (error) {
+      console.error('Error marking chat as read:', error);
+    }
   };
 
   const deleteChat = (chat: UIChat) => {
@@ -319,7 +340,7 @@ export default function ChatsScreen() {
               const contacts = await contactService.getContacts();
               const contact = contacts.find(c => 
                 c.contact_user_details.full_name === chat.name || 
-                c.contact_user_details.mobile_number === chat.name
+                c.contact_user_details.mobile_number === chat.phoneNumber
               );
               if (contact) {
                 await contactService.blockContact(contact.id);
@@ -422,14 +443,19 @@ export default function ChatsScreen() {
     }
   };
 
+  // Handle chat press - marks messages as read before navigating
   const handleChatPress = (chat: UIChat) => {
     if (chat.blocked) {
       Alert.alert('Blocked Contact', `You have blocked ${chat.name}.`);
       return;
     }
+    
+    // Mark chat as read (reset unread count)
     if (chat.unread > 0) {
-      updateChat(chat.chat_id, { unread: 0 });
+      markChatAsRead(chat.chat_id);
     }
+    
+    // Navigate to chat detail
     router.push(`/chat/${chat.chat_id}`);
   };
 
@@ -507,17 +533,22 @@ export default function ChatsScreen() {
     loadChats();
   }, []);
 
-  // Chat Avatar Component
+  // Chat Avatar Component with error handling
   const ChatAvatar = ({ uri, online }: { uri: string; online: boolean }) => {
     const [imageError, setImageError] = useState(false);
     const validUri = getValidImageUrl(uri);
+    
+    console.log('Avatar URI:', validUri);
     
     return (
       <View style={styles.avatarContainer}>
         <Image 
           source={{ uri: imageError ? 'https://randomuser.me/api/portraits/lego/1.jpg' : validUri }} 
           style={styles.avatar}
-          onError={() => setImageError(true)}
+          onError={(e) => {
+            console.log('Image failed to load:', validUri, e.nativeEvent.error);
+            setImageError(true);
+          }}
         />
         {online && <View style={styles.onlineBadge} />}
       </View>
@@ -547,6 +578,13 @@ export default function ChatsScreen() {
           </View>
           <Text style={[styles.chatTime, item.unread > 0 && styles.boldTime]}>{item.time}</Text>
         </View>
+        
+        {/* Display phone number for individual chats */}
+        {!item.isGroup && item.phoneNumber ? (
+          <Text style={styles.phoneNumber} numberOfLines={1}>
+            {item.phoneNumber}
+          </Text>
+        ) : null}
         
         <View style={styles.chatFooter}>
           <View style={styles.messageContainer}>
@@ -587,6 +625,9 @@ export default function ChatsScreen() {
       <ChatAvatar uri={item.avatar} online={false} />
       <View style={styles.chatInfo}>
         <Text style={styles.chatName}>{item.name}</Text>
+        {!item.isGroup && item.phoneNumber ? (
+          <Text style={styles.phoneNumber} numberOfLines={1}>{item.phoneNumber}</Text>
+        ) : null}
         <Text style={styles.lastMessage} numberOfLines={1}>{item.message}</Text>
       </View>
       <TouchableOpacity onPress={() => unarchiveChat(item)} style={styles.unarchiveButton}>
@@ -601,12 +642,12 @@ export default function ChatsScreen() {
       
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Aptec</Text>
+        <Text style={styles.headerTitle}>Chats</Text>
         <View style={styles.headerIcons}>
-          <TouchableOpacity style={styles.headerIcon} onPress={() => router.push('/dashboard')}>
+          <TouchableOpacity style={styles.headerIcon} onPress={() => router.push('/dashboard/camera')}>
             <Ionicons name="camera-outline" size={22} color="#000000" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.headerIcon} onPress={() => router.push('/dashboard')}>
+          <TouchableOpacity style={styles.headerIcon} onPress={() => router.push('/dashboard/search')}>
             <Ionicons name="search" size={22} color="#000000" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.headerIcon} onPress={handleMenuPress}>
@@ -750,7 +791,7 @@ export default function ChatsScreen() {
           <Ionicons 
             name={activeTab === 'chats' ? "chatbubbles" : "chatbubbles-outline"} 
             size={24} 
-            color={activeTab === 'chats' ? "rgb(7, 21, 13)16, 10)" : "#000000"} 
+            color={activeTab === 'chats' ? "#25D366" : "#000000"} 
           />
           <Text style={[styles.tabLabel, activeTab === 'chats' && styles.tabLabelActive]}>Chats</Text>
         </TouchableOpacity>
@@ -762,7 +803,7 @@ export default function ChatsScreen() {
           <Ionicons 
             name={activeTab === 'updates' ? "time" : "time-outline"} 
             size={24} 
-            color={activeTab === 'updates' ? "rgb(13, 18, 15)" : "#000000"} 
+            color={activeTab === 'updates' ? "#25D366" : "#000000"} 
           />
           <Text style={[styles.tabLabel, activeTab === 'updates' && styles.tabLabelActive]}>Updates</Text>
         </TouchableOpacity>
@@ -774,7 +815,7 @@ export default function ChatsScreen() {
           <Ionicons 
             name={activeTab === 'profile' ? "person" : "person-outline"} 
             size={24} 
-            color={activeTab === 'profile' ? "rgb(19, 22, 20)" : "#000000"} 
+            color={activeTab === 'profile' ? "#25D366" : "#000000"} 
           />
           <Text style={[styles.tabLabel, activeTab === 'profile' && styles.tabLabelActive]}>Profile</Text>
         </TouchableOpacity>
@@ -786,7 +827,7 @@ export default function ChatsScreen() {
           <Ionicons 
             name={activeTab === 'newBroadcast' ? "megaphone" : "megaphone-outline"} 
             size={24} 
-            color={activeTab === 'newBroadcast' ? "rgb(14, 31, 20)" : "#000000"} 
+            color={activeTab === 'newBroadcast' ? "#25D366" : "#000000"} 
           />
           <Text style={[styles.tabLabel, activeTab === 'newBroadcast' && styles.tabLabelActive]}>Broadcast</Text>
         </TouchableOpacity>
@@ -969,6 +1010,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
+    backgroundColor: '#f0f0f0',
   },
   onlineBadge: {
     position: 'absolute',
@@ -978,19 +1020,6 @@ const styles = StyleSheet.create({
     height: 14,
     borderRadius: 7,
     backgroundColor: '#25D366',
-    borderWidth: 2,
-    borderColor: '#fff',
-  },
-  mutedBadge: {
-    position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: '#FF9800',
-    justifyContent: 'center',
-    alignItems: 'center',
     borderWidth: 2,
     borderColor: '#fff',
   },
@@ -1021,6 +1050,11 @@ const styles = StyleSheet.create({
   boldName: {
     fontWeight: '700',
     color: '#000',
+  },
+  phoneNumber: {
+    fontSize: 12,
+    color: '#888',
+    marginBottom: 2,
   },
   blockedText: {
     fontSize: 13,
@@ -1190,7 +1224,7 @@ const styles = StyleSheet.create({
     color: '#000000',
   },
   tabLabelActive: {
-    color: '#090A09',
+    color: '#25D366',
     fontWeight: '500',
   },
 });

@@ -1,11 +1,23 @@
-import { View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, Image, KeyboardAvoidingView, Platform, StatusBar, Alert, Modal, Animated, Keyboard, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, Image, KeyboardAvoidingView, Platform, StatusBar, Alert, Modal, Animated, Dimensions, ActivityIndicator, AppState } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { chatService, websocketService, Message as APIMessage, Chat, User } from '../../lib/api';
+import { chatService, Message as APIMessage, Chat, User } from '../../lib/api';
+import { websocketService } from '../../lib/api/services/websocket.service';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+const getValidImageUrl = (imageUrl: string | undefined | null): string => {
+  const defaultAvatar = 'https://randomuser.me/api/portraits/lego/1.jpg';
+  if (!imageUrl) return defaultAvatar;
+  if (imageUrl.startsWith('data:image')) return imageUrl;
+  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) return imageUrl;
+  if (imageUrl.startsWith('/')) {
+    return `http://192.168.137.1:8000${imageUrl}`;
+  }
+  return defaultAvatar;
+};
 
 interface UIMessage {
   id: string;
@@ -16,6 +28,7 @@ interface UIMessage {
   senderAvatar?: string;
   time: string;
   status: 'sent' | 'delivered' | 'read' | 'failed';
+  createdAt?: string;
 }
 
 export default function ChatDetailScreen() {
@@ -30,20 +43,144 @@ export default function ChatDetailScreen() {
   const [menuVisible, setMenuVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [otherUserOnline, setOtherUserOnline] = useState(false);
+  
   const flatListRef = useRef<FlatList>(null);
+  const inputRef = useRef<TextInput>(null);
+  const appState = useRef(AppState.currentState);
+  const unsubscribeWebSocket = useRef<(() => void) | null>(null);
+  const pollingInterval = useRef<NodeJS.Timeout | null>(null);
+  const isMounted = useRef(true);
   
   const slideAnim = useRef(new Animated.Value(-300)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   
   const chatId = id as string;
 
-  // Load chat data
+  // ============ AUTO-FETCH FUNCTIONS ============
+  
+  // Main function to fetch messages automatically
+  const fetchMessagesAutomatically = useCallback(async () => {
+    if (!currentUser || !isMounted.current) return;
+    
+    try {
+      const msgs = await chatService.getMessages(chatId, 50, 0);
+      if (!isMounted.current) return;
+      
+      const formattedMessages: UIMessage[] = msgs.map((msg: APIMessage) => {
+        const isMe = msg.sender === currentUser?.id;
+        return {
+          id: msg.message_id,
+          message_id: msg.message_id,
+          text: msg.content,
+          senderId: msg.sender,
+          senderName: isMe 
+            ? (currentUser?.full_name || 'Me')
+            : (msg.sender_details?.full_name || otherUser?.full_name || 'Unknown'),
+          senderAvatar: isMe ? currentUser?.profile_picture : (msg.sender_details?.profile_picture || otherUser?.profile_picture),
+          time: formatTime(msg.created_at),
+          status: (msg.status_for_user as any) || 'sent',
+          createdAt: msg.created_at,
+        };
+      });
+      
+      const sortedMessages = formattedMessages.sort((a, b) => 
+        new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
+      );
+      
+      setMessages(sortedMessages);
+      
+      setTimeout(() => {
+        if (sortedMessages.length > 0 && isMounted.current) {
+          flatListRef.current?.scrollToEnd({ animated: false });
+        }
+      }, 100);
+    } catch (error) {
+      console.error('Auto-fetch error:', error);
+    } finally {
+      if (isMounted.current) {
+        setLoading(false);
+      }
+    }
+  }, [chatId, currentUser, otherUser]);
+
+  // Polling for new messages (every 2 seconds)
+  const startPolling = useCallback(() => {
+    if (pollingInterval.current) return;
+    
+    pollingInterval.current = setInterval(async () => {
+      if (isMounted.current && !websocketService.isConnected()) {
+        console.log('📡 Polling for new messages...');
+        await fetchMessagesAutomatically();
+      }
+    }, 2000);
+  }, [fetchMessagesAutomatically]);
+
+  const stopPolling = useCallback(() => {
+    if (pollingInterval.current) {
+      clearInterval(pollingInterval.current);
+      pollingInterval.current = null;
+    }
+  }, []);
+
+  // Auto-mark messages as read
+  const autoMarkAsRead = useCallback(() => {
+    if (!currentUser || !isMounted.current || messages.length === 0) return;
+    
+    const unreadMessages = messages.filter(
+      msg => msg.senderId !== currentUser.id && msg.status !== 'read'
+    );
+    
+    if (unreadMessages.length > 0 && websocketService.isConnected()) {
+      const unreadMessageIds = unreadMessages.map(msg => msg.message_id);
+      websocketService.sendReadReceipt(chatId, unreadMessageIds);
+      console.log('📖 Sent read receipts for', unreadMessageIds.length, 'messages');
+      
+      setMessages(prev => prev.map(msg => 
+        msg.senderId !== currentUser.id && msg.status !== 'read'
+          ? { ...msg, status: 'read' }
+          : msg
+      ));
+      setUnreadCount(0);
+    }
+  }, [chatId, currentUser, messages]);
+
+  // ============ INITIALIZATION ============
+  
   useEffect(() => {
+    isMounted.current = true;
     initializeChat();
+    
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    
     return () => {
+      isMounted.current = false;
+      stopPolling();
+      if (unsubscribeWebSocket.current) {
+        unsubscribeWebSocket.current();
+      }
       websocketService.disconnect();
+      subscription.remove();
     };
   }, [chatId]);
+
+  // Start polling when WebSocket disconnects
+  useEffect(() => {
+    if (isConnected) {
+      stopPolling();
+    } else if (currentUser && !isConnected) {
+      startPolling();
+    }
+  }, [isConnected, currentUser, startPolling, stopPolling]);
+
+  // Auto-mark messages as read
+  useEffect(() => {
+    if (messages.length > 0 && AppState.currentState === 'active') {
+      autoMarkAsRead();
+    }
+  }, [messages, autoMarkAsRead]);
 
   // Menu animation
   useEffect(() => {
@@ -61,135 +198,175 @@ export default function ChatDetailScreen() {
   }, [menuVisible]);
 
   // Send typing status
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      if (currentUser) {
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    
+    typingTimeoutRef.current = setTimeout(() => {
+      if (currentUser && websocketService.isConnected()) {
         websocketService.sendTyping(chatId, message.length > 0);
       }
     }, 500);
-    return () => clearTimeout(timeout);
+    
+    return () => {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    };
   }, [message]);
+
+  // ============ CORE FUNCTIONS ============
+  
+  const handleAppStateChange = (nextAppState: any) => {
+    if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+      console.log('📱 App came to foreground - refreshing');
+      fetchMessagesAutomatically();
+      setupWebSocket();
+    }
+    appState.current = nextAppState;
+  };
 
   const initializeChat = async () => {
     await loadCurrentUser();
     await loadChatDetails();
-    await loadMessages();
-    setupWebSocket();
+    await fetchMessagesAutomatically();
+    await setupWebSocket();
   };
 
   const loadCurrentUser = async () => {
     try {
       const userStr = await AsyncStorage.getItem('user');
-      if (userStr) {
+      if (userStr && isMounted.current) {
         const user = JSON.parse(userStr);
         setCurrentUser(user);
-        console.log('Current user loaded:', user.id, user.full_name);
+        console.log('👤 Current user loaded:', user.id);
       }
     } catch (error) {
-      console.error('Error loading current user:', error);
+      console.error('Error loading user:', error);
     }
   };
 
   const loadChatDetails = async () => {
+    if (!isMounted.current) return;
+    
     try {
       const chat = await chatService.getChat(chatId);
-      setChatDetails(chat);
-      console.log('Chat details loaded:', chat);
+      if (!isMounted.current) return;
       
-      // Extract other user from participants
+      setChatDetails(chat);
+      
       if (chat.chat_type === 'individual' && chat.participants) {
         const otherParticipant = chat.participants.find(p => p.user !== currentUser?.id);
         if (otherParticipant && otherParticipant.user_details) {
           setOtherUser(otherParticipant.user_details);
-          console.log('Other user found:', otherParticipant.user_details.full_name);
+          setOtherUserOnline(otherParticipant.user_details?.is_online || false);
+          setUnreadCount(otherParticipant.unread_count || 0);
         }
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error loading chat details:', error);
     }
   };
 
-  const loadMessages = async () => {
-    try {
-      setLoading(true);
-      const msgs = await chatService.getMessages(chatId, 50, 0);
-      console.log('Messages received:', msgs.length);
-      
-      const formattedMessages: UIMessage[] = msgs.map((msg: APIMessage) => {
-        const isMe = msg.sender === currentUser?.id;
-        // Get sender name from message details or other user
-        let senderName = 'Unknown';
-        let senderAvatar = undefined;
-        
-        if (isMe) {
-          senderName = currentUser?.full_name || currentUser?.mobile_number || 'Me';
-          senderAvatar = currentUser?.profile_picture;
-        } else {
-          // Try to get name from message sender details
-          if (msg.sender_details?.full_name) {
-            senderName = msg.sender_details.full_name;
-          } else if (msg.sender_details?.mobile_number) {
-            senderName = msg.sender_details.mobile_number;
-          } else if (otherUser?.full_name) {
-            senderName = otherUser.full_name;
-          } else if (otherUser?.mobile_number) {
-            senderName = otherUser.mobile_number;
-          } else if (chatDetails?.other_participant?.name) {
-            senderName = chatDetails.other_participant.name;
-          }
-          
-          senderAvatar = msg.sender_details?.profile_picture || otherUser?.profile_picture || chatDetails?.other_participant?.profile_picture;
-        }
-        
-        return {
-          id: msg.message_id,
-          message_id: msg.message_id,
-          text: msg.content,
-          senderId: msg.sender,
-          senderName: senderName,
-          senderAvatar: senderAvatar,
-          time: formatTime(msg.created_at),
-          status: msg.status_for_user as 'sent' | 'delivered' | 'read',
-        };
-      });
-      
-      setMessages(formattedMessages.reverse());
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 200);
-    } catch (error: any) {
-      console.error('Error loading messages:', error);
-    } finally {
-      setLoading(false);
+  const setupWebSocket = async () => {
+    if (!currentUser || !isMounted.current) return;
+    
+    const connected = await websocketService.connectToChat(chatId);
+    setIsConnected(connected);
+    
+    if (connected) {
+      setupWebSocketListeners();
     }
+    
+    // Monitor connection status
+    const interval = setInterval(() => {
+      if (isMounted.current) {
+        setIsConnected(websocketService.isConnected());
+      }
+    }, 3000);
+    
+    return () => clearInterval(interval);
   };
 
-  const setupWebSocket = () => {
-    if (!currentUser) return;
+  const setupWebSocketListeners = () => {
+    if (!isMounted.current) return;
     
-    websocketService.connectToChat(chatId);
+    if (unsubscribeWebSocket.current) {
+      unsubscribeWebSocket.current();
+    }
     
-    websocketService.on('new_message', (data) => {
-      console.log('New message via WebSocket:', data);
-      if (data.sender_id !== currentUser?.id) {
-        const newMessage: UIMessage = {
-          id: data.message_id || Date.now().toString(),
-          message_id: data.message_id,
-          text: data.content,
-          senderId: data.sender_id,
-          senderName: otherUser?.full_name || otherUser?.mobile_number || chatDetails?.other_participant?.name || 'Unknown',
-          senderAvatar: otherUser?.profile_picture || chatDetails?.other_participant?.profile_picture,
-          time: formatTime(new Date().toISOString()),
-          status: 'delivered',
-        };
-        setMessages(prev => [...prev, newMessage]);
-        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-      }
+    // Listen for new messages
+    const unsubscribeMessage = websocketService.on('new_message', (data) => {
+      if (!isMounted.current) return;
+      
+      console.log('📨 New message via WebSocket:', data);
+      
+      const newMessage: UIMessage = {
+        id: data.message_id || Date.now().toString(),
+        message_id: data.message_id,
+        text: data.content,
+        senderId: data.sender_id,
+        senderName: data.sender_name || otherUser?.full_name || 'Unknown',
+        senderAvatar: data.sender_avatar || otherUser?.profile_picture,
+        time: formatTime(new Date().toISOString()),
+        status: 'delivered',
+        createdAt: data.created_at || new Date().toISOString(),
+      };
+      
+      setMessages(prev => {
+        const exists = prev.some(msg => msg.message_id === data.message_id);
+        if (exists) return prev;
+        return [...prev, newMessage];
+      });
+      
+      setTimeout(() => {
+        if (isMounted.current) {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }
+      }, 100);
+      
+      autoMarkAsRead();
     });
     
-    websocketService.on('typing', (data) => {
+    // Listen for typing
+    const unsubscribeTyping = websocketService.on('typing', (data) => {
+      if (!isMounted.current) return;
       if (data.user_id !== currentUser?.id) {
         setOtherUserTyping(data.is_typing);
+        if (data.is_typing) {
+          setTimeout(() => {
+            if (isMounted.current) setOtherUserTyping(false);
+          }, 3000);
+        }
       }
     });
+    
+    // Listen for read receipts
+    const unsubscribeRead = websocketService.on('read_receipt', (data) => {
+      if (!isMounted.current) return;
+      console.log('👁️ Read receipt:', data);
+      setMessages(prev => prev.map(msg => 
+        data.message_ids?.includes(msg.message_id) ? { ...msg, status: 'read' } : msg
+      ));
+    });
+    
+    // Listen for connection events
+    const unsubscribeConnect = websocketService.on('connect', () => {
+      console.log('✅ WebSocket connected event');
+      setIsConnected(true);
+      fetchMessagesAutomatically();
+    });
+    
+    const unsubscribeDisconnect = websocketService.on('disconnect', () => {
+      console.log('❌ WebSocket disconnected event');
+      setIsConnected(false);
+    });
+    
+    unsubscribeWebSocket.current = () => {
+      unsubscribeMessage();
+      unsubscribeTyping();
+      unsubscribeRead();
+      unsubscribeConnect();
+      unsubscribeDisconnect();
+    };
   };
 
   const formatTime = (dateString: string): string => {
@@ -202,64 +379,96 @@ export default function ChatDetailScreen() {
       return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     } else if (hours < 48) {
       return 'Yesterday';
-    } else {
-      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
     }
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
   };
 
   const sendMessage = async () => {
-    if (!message.trim() || !currentUser) return;
+    if (!message.trim() || !currentUser || sendingMessage) return;
     
     setSendingMessage(true);
     const messageContent = message.trim();
-    const tempId = Date.now().toString();
-    const currentTime = new Date().toISOString();
+    const tempId = `temp_${Date.now()}`;
     
-    // Optimistically add message
     const optimisticMessage: UIMessage = {
       id: tempId,
       message_id: tempId,
       text: messageContent,
       senderId: currentUser.id,
-      senderName: currentUser.full_name || currentUser.mobile_number || 'Me',
+      senderName: currentUser.full_name || 'Me',
       senderAvatar: currentUser.profile_picture,
-      time: formatTime(currentTime),
+      time: formatTime(new Date().toISOString()),
       status: 'sent',
+      createdAt: new Date().toISOString(),
     };
     
     setMessages(prev => [...prev, optimisticMessage]);
     setMessage('');
+    
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     
     try {
-      const sentMessage = await chatService.sendMessage(chatId, {
-        content: messageContent,
-      });
+      const sentMessage = await chatService.sendMessage(chatId, { content: messageContent });
+      
+      if (!isMounted.current) return;
       
       setMessages(prev => prev.map(msg => 
-        msg.id === tempId 
-          ? { ...msg, id: sentMessage.message_id, message_id: sentMessage.message_id, status: 'delivered' }
-          : msg
+        msg.id === tempId ? { ...msg, id: sentMessage.message_id, message_id: sentMessage.message_id } : msg
       ));
-    } catch (error: any) {
+      
+      if (websocketService.isConnected()) {
+        websocketService.sendMessage(chatId, {
+          content: messageContent,
+          message_id: sentMessage.message_id,
+        });
+      }
+    } catch (error) {
       console.error('Error sending message:', error);
-      setMessages(prev => prev.map(msg => 
-        msg.id === tempId ? { ...msg, status: 'failed' } : msg
-      ));
-      Alert.alert('Error', 'Failed to send message');
+      if (isMounted.current) {
+        setMessages(prev => prev.map(msg => 
+          msg.id === tempId ? { ...msg, status: 'failed' } : msg
+        ));
+        Alert.alert('Error', 'Failed to send message');
+      }
     } finally {
-      setSendingMessage(false);
+      if (isMounted.current) setSendingMessage(false);
     }
   };
 
-  const handleCall = () => {
-    router.push(`/call/${chatId}?type=voice`);
+  const handleRetrySend = async (failedMessage: UIMessage) => {
+    if (!currentUser) return;
+    
+    const tempId = `retry_${Date.now()}`;
+    
+    setMessages(prev => prev.map(msg => 
+      msg.id === failedMessage.id ? { ...msg, id: tempId, status: 'sent' } : msg
+    ));
+    
+    try {
+      const sentMessage = await chatService.sendMessage(chatId, { content: failedMessage.text });
+      
+      if (!isMounted.current) return;
+      
+      setMessages(prev => prev.map(msg => 
+        msg.id === tempId ? { 
+          ...sentMessage, 
+          id: sentMessage.message_id, 
+          message_id: sentMessage.message_id,
+          senderId: currentUser.id,
+          senderName: currentUser.full_name || 'Me',
+          status: 'sent'
+        } : msg
+      ));
+    } catch (error) {
+      setMessages(prev => prev.map(msg => 
+        msg.id === tempId ? { ...msg, status: 'failed' } : msg
+      ));
+      Alert.alert('Error', 'Failed to resend');
+    }
   };
 
-  const handleVideoCall = () => {
-    router.push(`/call/${chatId}?type=video`);
-  };
-
+  const handleCall = () => router.push(`/call/${chatId}?type=voice`);
+  const handleVideoCall = () => router.push(`/call/${chatId}?type=video`);
   const openMenu = () => setMenuVisible(true);
   const closeMenu = () => setMenuVisible(false);
 
@@ -276,86 +485,62 @@ export default function ChatDetailScreen() {
     }
   };
 
-  const handleTabPress = (tab: string) => {
-    if (tab === 'chats') router.back();
-    else if (tab === 'updates') router.push('/dashboard/updates');
-    else if (tab === 'profile') router.push('/dashboard/profile');
-    else if (tab === 'newBroadcast') router.push('/dashboard/broadcast');
+  const AvatarImage = ({ uri, size = 40, style }: any) => {
+    const [error, setError] = useState(false);
+    return (
+      <Image 
+        source={{ uri: error ? 'https://randomuser.me/api/portraits/lego/1.jpg' : getValidImageUrl(uri) }}
+        style={[style, { width: size, height: size, borderRadius: size / 2 }]}
+        onError={() => setError(true)}
+      />
+    );
   };
 
-  // Render message
   const renderMessage = ({ item, index }: { item: UIMessage; index: number }) => {
     const isMe = item.senderId === currentUser?.id;
-    const showSenderName = !isMe && (index === 0 || messages[index - 1]?.senderId !== item.senderId);
     
     const getStatusIcon = () => {
       if (!isMe) return null;
       switch(item.status) {
         case 'read': return <Ionicons name="checkmark-done" size={14} color="#34B7F1" />;
         case 'delivered': return <Ionicons name="checkmark-done" size={14} color="#999" />;
-        case 'failed': return <Ionicons name="alert-circle" size={14} color="#FF3B30" />;
+        case 'failed': 
+          return (
+            <TouchableOpacity onPress={() => handleRetrySend(item)}>
+              <Ionicons name="alert-circle" size={14} color="#FF3B30" />
+            </TouchableOpacity>
+          );
         default: return <Ionicons name="checkmark" size={14} color="#999" />;
       }
     };
     
     return (
-      <View style={styles.messageContainer}>
-        {showSenderName && (
-          <View style={styles.senderNameContainer}>
-            {item.senderAvatar && (
-              <Image source={{ uri: item.senderAvatar }} style={styles.senderAvatar} />
-            )}
-            <Text style={styles.senderNameText}>{item.senderName}</Text>
-          </View>
-        )}
-        
-        <View style={[styles.messageRow, isMe ? styles.myMessageRow : styles.theirMessageRow]}>
-          <View style={[styles.messageBubble, isMe ? styles.myBubble : styles.theirBubble]}>
-            <Text style={[styles.messageText, isMe ? styles.myText : styles.theirText]}>
-              {item.text}
-            </Text>
-            <View style={styles.messageFooter}>
-              <Text style={styles.messageTime}>{item.time}</Text>
-              {getStatusIcon()}
-            </View>
+      <View style={[styles.messageRow, isMe ? styles.myMessageRow : styles.theirMessageRow]}>
+        {!isMe && <AvatarImage uri={item.senderAvatar} size={32} style={styles.messageAvatar} />}
+        <View style={[styles.messageBubble, isMe ? styles.myBubble : styles.theirBubble]}>
+          <Text style={styles.messageText}>{item.text}</Text>
+          <View style={styles.messageFooter}>
+            <Text style={styles.messageTime}>{item.time}</Text>
+            {getStatusIcon()}
           </View>
         </View>
       </View>
     );
   };
 
-  // Get display name for header
   const getDisplayName = () => {
-    if (chatDetails?.chat_type === 'group') {
-      return chatDetails.name || 'Group';
-    }
-    if (otherUser?.full_name) {
-      return otherUser.full_name;
-    }
-    if (otherUser?.mobile_number) {
-      return otherUser.mobile_number;
-    }
-    if (chatDetails?.other_participant?.name) {
-      return chatDetails.other_participant.name;
-    }
+    if (otherUser?.full_name) return otherUser.full_name;
+    if (otherUser?.mobile_number) return otherUser.mobile_number;
     return 'Unknown';
   };
 
-  // Get display avatar for header
-  const getDisplayAvatar = () => {
-    if (otherUser?.profile_picture) {
-      return otherUser.profile_picture;
-    }
-    if (chatDetails?.other_participant?.profile_picture) {
-      return chatDetails.other_participant.profile_picture;
-    }
-    return 'https://randomuser.me/api/portraits/lego/1.jpg';
-  };
+  const getDisplayAvatar = () => otherUser?.profile_picture;
 
   if (loading || !currentUser) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#075E54" />
+        <Text style={styles.loadingText}>Loading chat...</Text>
       </View>
     );
   }
@@ -364,40 +549,45 @@ export default function ChatDetailScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       
-      {/* Header - White Background */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#000000" />
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.headerInfo} onPress={() => {}}>
-          <Image 
-            source={{ uri: getDisplayAvatar() }} 
-            style={styles.headerAvatar} 
-          />
+        <View style={styles.headerInfo}>
+          <AvatarImage uri={getDisplayAvatar()} size={40} style={styles.headerAvatar} />
           <View style={styles.headerTextContainer}>
             <Text style={styles.headerName}>{getDisplayName()}</Text>
-            <Text style={styles.headerStatus}>
-              {otherUserTyping ? 'typing...' : (otherUser?.is_online ? 'Online' : 'Offline')}
-            </Text>
+            <View style={styles.headerStatusContainer}>
+              {!isConnected && <Ionicons name="wifi-outline" size={12} color="#FF9800" />}
+              <Text style={styles.headerStatus}>
+                {otherUserTyping ? 'typing...' : (otherUserOnline ? 'Online' : 'Offline')}
+              </Text>
+              {unreadCount > 0 && (
+                <View style={styles.unreadBadge}>
+                  <Text style={styles.unreadBadgeText}>{unreadCount}</Text>
+                </View>
+              )}
+            </View>
           </View>
-        </TouchableOpacity>
+        </View>
         
         <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.headerIcon} onPress={handleVideoCall}>
-            <Ionicons name="videocam" size={22} color="#000000" />
+          <TouchableOpacity onPress={handleVideoCall} style={styles.headerIcon}>
+            <Ionicons name="videocam" size={22} color="#000" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.headerIcon} onPress={handleCall}>
-            <Ionicons name="call" size={20} color="#000000" />
+          <TouchableOpacity onPress={handleCall} style={styles.headerIcon}>
+            <Ionicons name="call" size={20} color="#000" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.headerIcon} onPress={openMenu}>
-            <Ionicons name="ellipsis-vertical" size={20} color="#000000" />
+          <TouchableOpacity onPress={openMenu} style={styles.headerIcon}>
+            <Ionicons name="ellipsis-vertical" size={20} color="#000" />
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Dropdown Menu */}
-      <Modal transparent visible={menuVisible} animationType="none" onRequestClose={closeMenu}>
+  
+
+      <Modal transparent visible={menuVisible} onRequestClose={closeMenu}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={closeMenu}>
           <Animated.View style={[styles.dropdownMenu, { transform: [{ translateY: slideAnim }], opacity: fadeAnim }]}>
             <TouchableOpacity style={[styles.menuItem, styles.dangerMenuItem]} onPress={() => handleMenuItem('delete')}>
@@ -408,47 +598,50 @@ export default function ChatDetailScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* Typing Indicator */}
       {otherUserTyping && (
         <View style={styles.typingContainer}>
           <View style={styles.typingBubble}>
-            <Text style={styles.typingText}>typing...</Text>
-            <View style={styles.typingDots}>
-              <View style={styles.typingDot} />
-              <View style={styles.typingDot} />
-              <View style={styles.typingDot} />
-            </View>
+            <Text style={styles.typingText}>{getDisplayName()} is typing...</Text>
           </View>
         </View>
       )}
 
-      {/* Messages List */}
       <FlatList
         ref={flatListRef}
         data={messages}
         keyExtractor={(item) => item.id}
         renderItem={renderMessage}
         contentContainerStyle={styles.messagesContainer}
-        showsVerticalScrollIndicator={false}
-        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+        showsVerticalScrollIndicator={true}
+        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+        onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
+        ListEmptyComponent={() => (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="chatbubble-ellipses-outline" size={60} color="#ccc" />
+            <Text style={styles.emptyText}>No messages yet</Text>
+            <Text style={styles.emptySubtext}>Send a message to start chatting!</Text>
+          </View>
+        )}
       />
 
-      {/* Input Bar */}
-      <View style={styles.inputWrapper}>
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-          style={styles.keyboardAvoidingView}
-        >
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        style={styles.keyboardAvoidingView}
+      >
+        <View style={styles.inputWrapper}>
           <View style={styles.inputContainer}>
             <TextInput
+              ref={inputRef}
               style={styles.input}
               placeholder="Type a message..."
               placeholderTextColor="#999"
               value={message}
               onChangeText={setMessage}
               multiline
-              maxLength={1000}
+              maxHeight={100}
+              returnKeyType="send"
+              onSubmitEditing={sendMessage}
             />
             
             {message.trim() ? (
@@ -465,100 +658,50 @@ export default function ChatDetailScreen() {
               </TouchableOpacity>
             )}
           </View>
-        </KeyboardAvoidingView>
-      </View>
-
-      {/* Bottom Tab Navigation */}
-      <View style={styles.bottomTab}>
-        <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('chats')}>
-          <Ionicons name="chatbubbles-outline" size={24} color="#666" />
-          <Text style={styles.tabLabel}>Chats</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('updates')}>
-          <Ionicons name="time-outline" size={24} color="#666" />
-          <Text style={styles.tabLabel}>Updates</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('profile')}>
-          <Ionicons name="person-outline" size={24} color="#666" />
-          <Text style={styles.tabLabel}>Profile</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('newBroadcast')}>
-          <Ionicons name="megaphone-outline" size={24} color="#666" />
-          <Text style={styles.tabLabel}>Broadcast</Text>
-        </TouchableOpacity>
-      </View>
+        </View>
+      </KeyboardAvoidingView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-  },
+  container: { flex: 1, backgroundColor: '#f5f5f5' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
+  loadingText: { marginTop: 12, fontSize: 14, color: '#666' },
   
-  // Header Styles - White Background
   header: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFF',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    paddingTop: Platform.OS === 'ios' ? 50 : StatusBar.currentHeight ? StatusBar.currentHeight + 15 : 80,
+    paddingTop: Platform.OS === 'ios' ? 50 : (StatusBar.currentHeight || 0) + 15,
     borderBottomWidth: 0.5,
     borderBottomColor: '#E0E0E0',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
   },
-  backButton: {
-    padding: 4,
-    marginRight: 8,
-  },
-  headerInfo: {
+  backButton: { padding: 4, marginRight: 8 },
+  headerInfo: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  headerAvatar: { width: 40, height: 40, borderRadius: 20, marginRight: 12, backgroundColor: '#f0f0f0' },
+  headerTextContainer: { flex: 1 },
+  headerName: { fontSize: 16, fontWeight: 'bold', color: '#000' },
+  headerStatusContainer: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  headerStatus: { fontSize: 12, color: '#666' },
+  unreadBadge: { backgroundColor: '#075E54', borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2, marginLeft: 6 },
+  unreadBadgeText: { fontSize: 10, color: '#fff', fontWeight: 'bold' },
+  headerActions: { flexDirection: 'row', gap: 20 },
+  headerIcon: { padding: 4 },
+  
+  connectionBar: {
+    backgroundColor: '#FF9800',
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    justifyContent: 'center',
+    paddingVertical: 4,
+    gap: 8,
   },
-  headerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12,
-  },
-  headerTextContainer: {
-    flex: 1,
-  },
-  headerName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#000000',
-  },
-  headerStatus: {
-    fontSize: 12,
-    color: '#666666',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    gap: 20,
-  },
-  headerIcon: {
-    padding: 4,
-  },
+  connectionBarText: { fontSize: 12, color: '#fff' },
   
-  // Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
   dropdownMenu: {
     position: 'absolute',
     top: Platform.OS === 'ios' ? 110 : (StatusBar.currentHeight || 0) + 70,
@@ -572,182 +715,36 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 5,
-    zIndex: 1000,
   },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 12,
-  },
-  menuItemText: {
-    fontSize: 16,
-    color: '#333',
-  },
-  dangerMenuItem: {
-    backgroundColor: '#fff',
-  },
-  dangerText: {
-    color: '#FF3B30',
-  },
+  menuItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 12 },
+  menuItemText: { fontSize: 16, color: '#333' },
+  dangerMenuItem: { backgroundColor: '#fff' },
+  dangerText: { color: '#FF3B30' },
   
-  // Messages Container
-  messagesContainer: {
-    padding: 16,
-    paddingBottom: 20,
-  },
+  messagesContainer: { padding: 16, paddingBottom: 120 },
+  messageRow: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 12 },
+  myMessageRow: { justifyContent: 'flex-end' },
+  theirMessageRow: { justifyContent: 'flex-start' },
+  messageAvatar: { width: 32, height: 32, borderRadius: 16, marginRight: 8, backgroundColor: '#f0f0f0' },
+  messageBubble: { maxWidth: '75%', padding: 10, borderRadius: 18 },
+  myBubble: { backgroundColor: '#DCF8C5', borderTopRightRadius: 4 },
+  theirBubble: { backgroundColor: '#FFF', borderTopLeftRadius: 4, borderWidth: 0.5, borderColor: '#E0E0E0' },
+  messageText: { fontSize: 15, lineHeight: 20, color: '#000' },
+  messageFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 4, gap: 4 },
+  messageTime: { fontSize: 10, color: '#999' },
   
-  // Message Styles
-  messageContainer: {
-    marginBottom: 12,
-  },
-  senderNameContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-    marginLeft: 8,
-  },
-  senderAvatar: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    marginRight: 6,
-  },
-  senderNameText: {
-    fontSize: 12,
-    color: '#666',
-    fontWeight: '500',
-  },
-  messageRow: {
-    flexDirection: 'row',
-  },
-  myMessageRow: {
-    justifyContent: 'flex-end',
-  },
-  theirMessageRow: {
-    justifyContent: 'flex-start',
-  },
-  messageBubble: {
-    maxWidth: '75%',
-    padding: 10,
-    borderRadius: 18,
-  },
-  myBubble: {
-    backgroundColor: '#DCF8C5',
-    borderTopRightRadius: 4,
-  },
-  theirBubble: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 4,
-    borderWidth: 0.5,
-    borderColor: '#E0E0E0',
-  },
-  messageText: {
-    fontSize: 15,
-    lineHeight: 20,
-  },
-  myText: {
-    color: '#000000',
-  },
-  theirText: {
-    color: '#000000',
-  },
-  messageFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    marginTop: 4,
-    gap: 4,
-  },
-  messageTime: {
-    fontSize: 10,
-    color: '#999',
-  },
+  typingContainer: { paddingHorizontal: 16, paddingVertical: 8 },
+  typingBubble: { backgroundColor: '#E8E8E8', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 18, alignSelf: 'flex-start' },
+  typingText: { fontSize: 12, color: '#666', fontStyle: 'italic' },
   
-  // Typing Indicator
-  typingContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  typingBubble: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E8E8E8',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 18,
-    alignSelf: 'flex-start',
-    gap: 8,
-  },
-  typingText: {
-    fontSize: 12,
-    color: '#666',
-    fontStyle: 'italic',
-  },
-  typingDots: {
-    flexDirection: 'row',
-    gap: 3,
-  },
-  typingDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#666',
-  },
+  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: SCREEN_HEIGHT * 0.3 },
+  emptyText: { fontSize: 16, color: '#999', marginTop: 12 },
+  emptySubtext: { fontSize: 14, color: '#ccc', marginTop: 4 },
   
-  // Input Bar
-  inputWrapper: {
-    backgroundColor: '#fff',
-    borderTopWidth: 0.5,
-    borderTopColor: '#e0e0e0',
-  },
-  keyboardAvoidingView: {
-    backgroundColor: '#fff',
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    padding: 10,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    gap: 8,
-  },
-  input: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 25,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    maxHeight: 100,
-    fontSize: 16,
-    backgroundColor: '#fff',
-    color: '#000',
-  },
-  micButton: {
-    padding: 4,
-  },
-  sendButton: {
-    padding: 4,
-  },
-  
-  // Bottom Tab
-  bottomTab: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderTopWidth: 0.5,
-    borderTopColor: '#e0e0e0',
-    paddingVertical: 8,
-    paddingBottom: Platform.OS === 'ios' ? 28 : 76,
-  },
-  tabItem: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  tabLabel: {
-    fontSize: 12,
-    color: '#666',
-  },
+  keyboardAvoidingView: { position: 'absolute', bottom: 0, left: 0, right: 0 },
+  inputWrapper: { backgroundColor: '#fff', borderTopWidth: 0.5, borderTopColor: '#e0e0e0', paddingVertical: 8, paddingBottom: Platform.OS === 'ios' ? 38 : 78 },
+  inputContainer: { flexDirection: 'row', paddingHorizontal: 10, paddingVertical: 8, backgroundColor: '#fff', alignItems: 'flex-end', gap: 8 },
+  input: { flex: 1, borderWidth: 1, borderColor: '#ddd', borderRadius: 25, paddingHorizontal: 16, paddingVertical: 10, maxHeight: 100, fontSize: 16, backgroundColor: '#fff', color: '#000' },
+  micButton: { padding: 8, width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
+  sendButton: { padding: 8, width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
 });
