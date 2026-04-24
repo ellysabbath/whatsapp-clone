@@ -1,13 +1,13 @@
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Platform, Modal, KeyboardAvoidingView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Platform, Modal, KeyboardAvoidingView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { formService, Question, CreateFormData } from '../../../lib/api/services/form.service';
 
-interface Question {
+interface LocalQuestion {
   id: string;
   text: string;
-  type: 'short_answer' | 'checkbox' | 'radio' | 'accept' | 'understand' | 'learn_more';
+  type: Question['question_type'];
   options?: string[];
   points: number;
 }
@@ -16,12 +16,13 @@ export default function CreateFormScreen() {
   const router = useRouter();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [questions, setQuestions] = useState<Question[]>([]);
+  const [questions, setQuestions] = useState<LocalQuestion[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState('');
-  const [questionType, setQuestionType] = useState<Question['type']>('short_answer');
+  const [questionType, setQuestionType] = useState<Question['question_type']>('short_answer');
   const [questionPoints, setQuestionPoints] = useState('1');
   const [showQuestionBuilder, setShowQuestionBuilder] = useState(false);
   const [customOptions, setCustomOptions] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const questionTypes = [
     { value: 'short_answer', label: 'Short Answer', icon: 'create-outline' },
@@ -47,7 +48,7 @@ export default function CreateFormScreen() {
       options = customOptions.split(',').map(opt => opt.trim());
     }
 
-    const newQuestion: Question = {
+    const newQuestion: LocalQuestion = {
       id: Date.now().toString(),
       text: currentQuestion,
       type: questionType,
@@ -76,27 +77,32 @@ export default function CreateFormScreen() {
       return;
     }
 
-    const formData = {
-      id: Date.now().toString(),
-      title,
-      description,
-      questions,
-      createdAt: new Date().toISOString(),
-      composer: 'Current User',
+    setIsSubmitting(true);
+    
+    const formData: CreateFormData = {
+      title: title.trim(),
+      description: description.trim(),
       status: 'active',
-      responses: [],
+      is_public: true,
+      questions: questions.map((q, index) => ({
+        text: q.text,
+        question_type: q.type,
+        options: q.options,
+        points: q.points,
+        order: index,
+        is_required: true,
+      })),
     };
 
     try {
-      const existingForms = await AsyncStorage.getItem('evangelistic_forms');
-      const forms = existingForms ? JSON.parse(existingForms) : [];
-      forms.push(formData);
-      await AsyncStorage.setItem('evangelistic_forms', JSON.stringify(forms));
+      const response = await formService.createForm(formData);
       Alert.alert('Success', 'Form created successfully!', [
         { text: 'OK', onPress: () => router.push('/dashboard/formlist') }
       ]);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to save form');
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to create form');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -116,11 +122,15 @@ export default function CreateFormScreen() {
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="rgb(15, 15, 12)" />
+          <Ionicons name="arrow-back" size={24} color="#000000" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Create New Form</Text>
-        <TouchableOpacity onPress={saveForm} style={styles.saveButton}>
-          <Ionicons name="checkmark" size={24} color="rgb(17, 2, 2)" />
+        <TouchableOpacity onPress={saveForm} style={styles.saveButton} disabled={isSubmitting}>
+          {isSubmitting ? (
+            <ActivityIndicator size="small" color="#25D366" />
+          ) : (
+            <Ionicons name="checkmark" size={24} color="#000000" />
+          )}
         </TouchableOpacity>
       </View>
 
@@ -201,7 +211,7 @@ export default function CreateFormScreen() {
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <TouchableOpacity onPress={() => setShowQuestionBuilder(false)}>
-              <Ionicons name="close" size={24} color="#075E54" />
+              <Ionicons name="close" size={24} color="#000000" />
             </TouchableOpacity>
             <Text style={styles.modalTitle}>Add Question</Text>
             <TouchableOpacity onPress={addQuestion}>
@@ -228,7 +238,7 @@ export default function CreateFormScreen() {
                     styles.typeCard,
                     questionType === type.value && styles.typeCardActive
                   ]}
-                  onPress={() => setQuestionType(type.value as Question['type'])}
+                  onPress={() => setQuestionType(type.value as Question['question_type'])}
                 >
                   <Ionicons 
                     name={type.icon} 
@@ -280,21 +290,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
   },
   header: {
-    backgroundColor: '#E1E6E5',
+    backgroundColor: '#FFFFFF',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingTop: Platform.OS === 'ios' ? 50 : 76,
     paddingBottom: 12,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#e0e0e0',
   },
   backButton: {
     padding: 4,
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#01010A',
+    fontWeight: '600',
+    color: '#000000',
   },
   saveButton: {
     padding: 4,
@@ -335,7 +347,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#075E54',
+    color: '#25D366',
   },
   addButton: {
     padding: 4,

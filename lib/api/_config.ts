@@ -1,14 +1,6 @@
-// API Configuration
+// lib/api/_config.ts
 export const API_CONFIG = {
-  // For Android Emulator
-  // BASE_URL: 'http://10.0.2.2:8000/api/',
-  
-  // For iOS Simulator
-  // BASE_URL: 'http://localhost:8000/api/',
-  
-  // For Physical Device (replace with your computer's IP)
   BASE_URL: 'http://192.168.137.1:8000/api/',
-  
   TIMEOUT: 30000,
   
   ENDPOINTS: {
@@ -59,6 +51,18 @@ export const API_CONFIG = {
     // Broadcast endpoints
     BROADCASTS: '/broadcasts/',
     SEND_BROADCAST: '/broadcasts/send/',
+    
+    // Form endpoints
+    FORMS: '/forms/',
+    FORM_DETAIL: '/forms/:formId/',
+    FORM_PUBLIC: '/forms/:formId/public/',
+    FORM_SUBMIT: '/forms/:formId/submit/',
+    FORM_RESPONSES: '/forms/:formId/responses/',
+    FORM_RESPONSE_GRADE: '/forms/responses/:responseId/grade/',
+    FORM_RESPONSE_DELETE: '/forms/responses/:responseId/delete/',
+    FORM_SHARE: '/forms/:formId/share/',
+    FORM_JOIN: '/forms/join/',
+    FORM_STATS: '/forms/:formId/stats/',
   }
 };
 

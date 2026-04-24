@@ -672,10 +672,10 @@ export default function ChatsScreen() {
               <Ionicons name="star-outline" size={22} color="#000000" />
               <Text style={styles.menuItemText}>Starred messages</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.menuItem} onPress={() => handleMenuItem('archived')}>
+            {/* <TouchableOpacity style={styles.menuItem} onPress={() => handleMenuItem('archived')}>
               <Ionicons name="archive-outline" size={22} color="#000000" />
               <Text style={styles.menuItemText}>Archived chats</Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
             <View style={styles.menuDivider} />
             <TouchableOpacity style={styles.menuItem} onPress={() => handleMenuItem('forms')}>
               <Ionicons name="document-text-outline" size={22} color="#000000" />

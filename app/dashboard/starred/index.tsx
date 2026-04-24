@@ -1,113 +1,249 @@
 // app/starred-messages.tsx
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, Platform, StatusBar, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, Platform, StatusBar, Alert, ActivityIndicator, RefreshControl } from 'react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { chatService, Message, User } from '../../../lib/api';
 
-const starredMessages = [
-  {
-    id: '1',
-    message: "Hey! Don't forget about the meeting tomorrow at 10am",
-    time: 'Yesterday at 3:30 PM',
-    chatId: '1',
-    chatName: 'Sarah Johnson',
-    chatAvatar: 'https://randomuser.me/api/portraits/women/1.jpg',
-    media: null,
-  },
-  {
-    id: '2',
-    message: "I love this photo! 📸",
-    time: 'Monday at 8:15 PM',
-    chatId: '2',
-    chatName: 'Mike Chen',
-    chatAvatar: 'https://randomuser.me/api/portraits/men/2.jpg',
-    media: 'https://picsum.photos/200',
-  },
-  {
-    id: '3',
-    message: "Check out this document - very important",
-    time: 'Sunday at 11:20 AM',
-    chatId: '3',
-    chatName: 'Emma Wilson',
-    chatAvatar: 'https://randomuser.me/api/portraits/women/3.jpg',
-    media: null,
-    hasDoc: true,
-  },
-  {
-    id: '4',
-    message: "Great job on the project! 🎉",
-    time: 'Last week',
-    chatId: '4',
-    chatName: 'David Brown',
-    chatAvatar: 'https://randomuser.me/api/portraits/men/4.jpg',
-    media: null,
-  },
-  {
-    id: '5',
-    message: "Family dinner this Sunday at 7pm",
-    time: 'Last week',
-    chatId: '5',
-    chatName: 'Family Group',
-    chatAvatar: 'https://randomuser.me/api/portraits/women/5.jpg',
-    media: null,
-    isGroup: true,
-  },
-];
+// API Configuration
+const API_BASE_URL = 'http://192.168.137.1:8000';
+
+interface StarredMessage {
+  id: string;
+  message_id: string;
+  content: string;
+  message_type: string;
+  media_url: string | null;
+  created_at: string;
+  chat_id: string;
+  chat_name: string;
+  chat_avatar: string;
+  isGroup: boolean;
+  sender_name: string;
+  sender_id: number;
+}
 
 export default function StarredMessagesScreen() {
   const router = useRouter();
+  const [starredMessages, setStarredMessages] = useState<StarredMessage[]>([]);
+  const [filteredMessages, setFilteredMessages] = useState<StarredMessage[]>([]);
   const [filter, setFilter] = useState('all');
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+
+  // Helper function to get valid image URL
+  const getValidImageUrl = (imageUrl: string | undefined | null): string => {
+    const defaultAvatar = 'https://randomuser.me/api/portraits/lego/1.jpg';
+    
+    if (!imageUrl) {
+      return defaultAvatar;
+    }
+    
+    if (imageUrl.startsWith('data:image')) {
+      return imageUrl;
+    }
+    
+    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+      return imageUrl;
+    }
+    
+    if (imageUrl.startsWith('/')) {
+      return `${API_BASE_URL}${imageUrl}`;
+    }
+    
+    return defaultAvatar;
+  };
+
+  // Load current user and starred messages
+  useEffect(() => {
+    loadCurrentUser();
+    loadStarredMessages();
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadStarredMessages();
+    }, [])
+  );
+
+  useEffect(() => {
+    filterMessages();
+  }, [starredMessages, filter]);
+
+  const loadCurrentUser = async () => {
+    try {
+      const userStr = await AsyncStorage.getItem('user');
+      if (userStr) {
+        setCurrentUser(JSON.parse(userStr));
+      }
+    } catch (error) {
+      console.error('Error loading current user:', error);
+    }
+  };
+
+  const loadStarredMessages = async () => {
+    try {
+      setLoading(true);
+      const messages = await chatService.getStarredMessages();
+      
+      // Format messages for display
+      const formattedMessages: StarredMessage[] = messages.map((msg: Message) => {
+        // Extract chat name and avatar from message
+        let chatName = 'Unknown';
+        let chatAvatar = '';
+        let isGroup = false;
+        
+        if (msg.sender_details) {
+          chatName = msg.sender_details.full_name || msg.sender_details.mobile_number || 'Unknown';
+          chatAvatar = getValidImageUrl(msg.sender_details.profile_picture);
+        }
+        
+        return {
+          id: msg.message_id,
+          message_id: msg.message_id,
+          content: msg.content,
+          message_type: msg.message_type,
+          media_url: msg.media_url,
+          created_at: msg.created_at,
+          chat_id: msg.chat.toString(),
+          chat_name: chatName,
+          chat_avatar: chatAvatar,
+          isGroup: false,
+          sender_name: msg.sender_details?.full_name || 'Unknown',
+          sender_id: msg.sender,
+        };
+      });
+      
+      setStarredMessages(formattedMessages);
+      console.log('Starred messages loaded:', formattedMessages.length);
+    } catch (error: any) {
+      console.error('Error loading starred messages:', error);
+      Alert.alert('Error', error.message || 'Failed to load starred messages');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onRefresh = useCallback(() => {
+    loadStarredMessages();
+  }, []);
+
+  const filterMessages = () => {
+    let filtered = [...starredMessages];
+    
+    if (filter === 'media') {
+      filtered = filtered.filter(msg => 
+        msg.message_type === 'image' || 
+        msg.message_type === 'video' || 
+        msg.media_url
+      );
+    } else if (filter === 'docs') {
+      filtered = filtered.filter(msg => 
+        msg.message_type === 'document'
+      );
+    }
+    
+    setFilteredMessages(filtered);
+  };
 
   const handleMessagePress = (chatId: string, messageId: string) => {
     router.push(`/chat/${chatId}`);
   };
 
-  const handleUnstar = (messageId: string) => {
+  const handleUnstar = async (messageId: string) => {
     Alert.alert(
       'Remove from starred',
       'Are you sure you want to remove this message from starred?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Remove', style: 'destructive', onPress: () => console.log('Unstarred:', messageId) }
+        { 
+          text: 'Remove', 
+          style: 'destructive', 
+          onPress: async () => {
+            try {
+              await chatService.toggleStarMessage(messageId);
+              // Remove from local list
+              setStarredMessages(prev => prev.filter(msg => msg.message_id !== messageId));
+              Alert.alert('Success', 'Message removed from starred');
+            } catch (error: any) {
+              Alert.alert('Error', error.message || 'Failed to remove starred message');
+            }
+          }
+        }
       ]
     );
   };
 
-  const renderMessage = ({ item }: any) => (
+  const formatTime = (dateString: string): string => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    
+    if (days === 0) {
+      if (hours === 0) {
+        const minutes = Math.floor(diff / (1000 * 60));
+        return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
+      }
+      return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+    } else if (days === 1) {
+      return 'Yesterday';
+    } else if (days < 7) {
+      return `${days} days ago`;
+    } else {
+      return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+  };
+
+  const renderMessage = ({ item }: { item: StarredMessage }) => (
     <TouchableOpacity 
       style={styles.messageCard}
-      onPress={() => handleMessagePress(item.chatId, item.id)}
+      onPress={() => handleMessagePress(item.chat_id, item.message_id)}
       activeOpacity={0.7}
     >
       {/* Chat Info */}
       <View style={styles.chatHeader}>
-        <Image source={{ uri: item.chatAvatar }} style={styles.chatAvatar} />
+        <Image source={{ uri: item.chat_avatar }} style={styles.chatAvatar} />
         <View style={styles.chatInfo}>
-          <Text style={styles.chatName}>{item.chatName}</Text>
-          <Text style={styles.messageTime}>{item.time}</Text>
+          <Text style={styles.chatName}>{item.chat_name}</Text>
+          <Text style={styles.messageTime}>{formatTime(item.created_at)}</Text>
         </View>
-        <TouchableOpacity onPress={() => handleUnstar(item.id)} style={styles.starButton}>
+        <TouchableOpacity onPress={() => handleUnstar(item.message_id)} style={styles.starButton}>
           <Ionicons name="star" size={22} color="#FFC107" />
         </TouchableOpacity>
       </View>
 
       {/* Message Content */}
       <View style={styles.messageContent}>
-        {item.media && (
-          <Image source={{ uri: item.media }} style={styles.messageMedia} />
+        {item.media_url && (item.message_type === 'image') && (
+          <Image source={{ uri: item.media_url }} style={styles.messageMedia} />
         )}
-        {item.hasDoc && (
-          <View style={styles.documentPreview}>
-            <Ionicons name="document-text" size={32} color="#075E54" />
-            <Text style={styles.documentText}>Document.pdf</Text>
+        {item.media_url && (item.message_type === 'video') && (
+          <View style={styles.videoPreview}>
+            <Ionicons name="play-circle" size={48} color="#075E54" />
+            <Text style={styles.videoText}>Video message</Text>
           </View>
         )}
-        <Text style={styles.messageText}>{item.message}</Text>
+        {item.message_type === 'document' && (
+          <View style={styles.documentPreview}>
+            <Ionicons name="document-text" size={32} color="#075E54" />
+            <Text style={styles.documentText}>Document</Text>
+          </View>
+        )}
+        <Text style={styles.messageText} numberOfLines={3}>
+          {item.content}
+        </Text>
       </View>
 
       {/* Actions */}
       <View style={styles.messageActions}>
-        <TouchableOpacity style={styles.actionButton}>
+        <TouchableOpacity 
+          style={styles.actionButton}
+          onPress={() => handleMessagePress(item.chat_id, item.message_id)}
+        >
           <Ionicons name="chatbubble-outline" size={18} color="#666" />
           <Text style={styles.actionText}>Reply</Text>
         </TouchableOpacity>
@@ -134,6 +270,15 @@ export default function StarredMessagesScreen() {
     </View>
   );
 
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#25D366" />
+        <Text style={styles.loadingText}>Loading starred messages...</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
@@ -141,12 +286,10 @@ export default function StarredMessagesScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#041816" />
+          <Ionicons name="arrow-back" size={24} color="#000000" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Starred messages</Text>
-        <TouchableOpacity style={styles.menuButton}>
-          <Ionicons name="ellipsis-vertical" size={20} color="#075E54" />
-        </TouchableOpacity>
+        <View style={styles.placeholder} />
       </View>
 
       {/* Filter Tabs */}
@@ -181,12 +324,15 @@ export default function StarredMessagesScreen() {
 
       {/* Starred Messages List */}
       <FlatList
-        data={starredMessages}
+        data={filteredMessages}
         keyExtractor={(item) => item.id}
         renderItem={renderMessage}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContainer}
         ListEmptyComponent={EmptyState}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#25D366"]} tintColor="#25D366" />
+        }
       />
     </View>
   );
@@ -196,6 +342,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666',
   },
   header: {
     flexDirection: 'row',
@@ -214,10 +371,10 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#041816',
+    color: '#000000',
   },
-  menuButton: {
-    padding: 4,
+  placeholder: {
+    width: 32,
   },
   filterContainer: {
     flexDirection: 'row',
@@ -282,6 +439,7 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     marginRight: 12,
+    backgroundColor: '#f0f0f0',
   },
   chatInfo: {
     flex: 1,
@@ -307,6 +465,19 @@ const styles = StyleSheet.create({
     height: 200,
     borderRadius: 8,
     marginBottom: 8,
+  },
+  videoPreview: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f0f0f0',
+    height: 150,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  videoText: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 8,
   },
   documentPreview: {
     flexDirection: 'row',
