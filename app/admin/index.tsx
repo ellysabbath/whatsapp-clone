@@ -1,4 +1,4 @@
-// app/admin/dashboard.tsx
+// app/admin/index.tsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
@@ -16,17 +16,69 @@ import {
   Animated,
   Platform,
   StatusBar,
-  AppState,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import adminAPI, { User, Role, UserStats } from '../../lib/api/admin';
 
-type TabType = 'dashboard' | 'users' | 'roles' | 'sessions';
+// ==================== API CONFIGURATION ====================
+const API_BASE_URL = 'https://aptecproject.pythonanywhere.com/api';
 
-// Theme definitions
-const THEMES = {
+const apiCall = async (endpoint: string, method: string = 'GET', body?: any) => {
+  const token = await AsyncStorage.getItem('access_token');
+  const options: RequestInit = {
+    method,
+    headers: {
+      'Authorization': token ? `Bearer ${token}` : '',
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    },
+  };
+  if (body) {
+    options.body = JSON.stringify(body);
+  }
+  
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
+  const text = await response.text();
+  
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    console.error('API Error:', endpoint, text.substring(0, 200));
+    throw new Error('Server response error');
+  }
+};
+
+// ==================== TYPES ====================
+interface User {
+  id: number;
+  mobile_number: string;
+  email: string;
+  full_name: string;
+  is_active: boolean;
+  is_staff: boolean;
+  date_joined: string;
+  user_role?: { role_display: string };
+}
+
+interface Role {
+  id: number;
+  role: string;
+  role_display: string;
+  status: string;
+  status_display: string;
+  user: number;
+  user_name?: string;
+  assigned_at: string;
+}
+
+interface Stats {
+  users: { total: number; active: number; inactive: number; staff: number };
+  roles: { total: number; admin: number; middleman: number; user: number };
+}
+
+// ==================== THEMES ====================
+const THEMES: Record<string, any> = {
   light: {
     id: 'light',
     name: 'Light',
@@ -38,7 +90,6 @@ const THEMES = {
       text: '#000000',
       textSecondary: '#666666',
       border: '#e0e0e0',
-      card: '#ffffff',
       success: '#4CAF50',
       error: '#f44336',
       warning: '#FF9800',
@@ -56,7 +107,6 @@ const THEMES = {
       text: '#E9EDEF',
       textSecondary: '#AEBAC1',
       border: '#2A3942',
-      card: '#202C33',
       success: '#4CAF50',
       error: '#f44336',
       warning: '#FF9800',
@@ -74,7 +124,6 @@ const THEMES = {
       text: '#0D47A1',
       textSecondary: '#1976D2',
       border: '#90CAF9',
-      card: '#ffffff',
       success: '#4CAF50',
       error: '#f44336',
       warning: '#FF9800',
@@ -92,7 +141,6 @@ const THEMES = {
       text: '#4A148C',
       textSecondary: '#7B1FA2',
       border: '#CE93D8',
-      card: '#ffffff',
       success: '#4CAF50',
       error: '#f44336',
       warning: '#FF9800',
@@ -101,12 +149,15 @@ const THEMES = {
   },
 };
 
-export default function AdminSuperDashboard() {
+type TabType = 'dashboard' | 'users' | 'roles';
+
+// ==================== MAIN COMPONENT ====================
+export default function AdminDashboard() {
   const router = useRouter();
   
   // State
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
-  const [stats, setStats] = useState<UserStats | null>(null);
+  const [stats, setStats] = useState<Stats | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
@@ -114,166 +165,78 @@ export default function AdminSuperDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [menuVisible, setMenuVisible] = useState(false);
   const [currentTheme, setCurrentTheme] = useState('light');
-  const [isOnline, setIsOnline] = useState(true);
-  const [syncing, setSyncing] = useState(false);
-  
-  // Modal states
+  const [currentAdmin, setCurrentAdmin] = useState<any>(null);
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [modalType, setModalType] = useState<'user' | 'role'>('user');
-  const [selectedItem, setSelectedItem] = useState<any>(null);
-  const [formData, setFormData] = useState<any>({});
+  const [editingItem, setEditingItem] = useState<any>(null);
+  const [form, setForm] = useState<any>({});
   
   // Animations
   const slideAnim = useRef(new Animated.Value(-300)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const theme = THEMES[currentTheme as keyof typeof THEMES];
+  const toastAnim = useRef(new Animated.Value(0)).current;
+  
+  const theme = THEMES[currentTheme];
   const colors = theme.colors;
 
-  // Load theme and cached data
+  // ==================== LOAD DATA ====================
   useEffect(() => {
+    loadAdmin();
     loadTheme();
-    loadCachedData();
-    setupNetworkListener();
-    
-    return () => {
-      AppState.removeEventListener('change', handleAppStateChange);
-    };
   }, []);
 
   useEffect(() => {
     loadData();
   }, [activeTab, searchQuery]);
 
-  // Setup network listener
-  const setupNetworkListener = () => {
-    AppState.addEventListener('change', handleAppStateChange);
-  };
-
-  const handleAppStateChange = (nextAppState: string) => {
-    if (nextAppState === 'active') {
-      checkOnlineStatus();
-      syncData();
-    }
-  };
-
-  const checkOnlineStatus = async () => {
+  const loadAdmin = async () => {
     try {
-      const response = await adminAPI.getUserStats();
-      setIsOnline(response.status === 'success');
-    } catch (error) {
-      setIsOnline(false);
-    }
+      const userStr = await AsyncStorage.getItem('user');
+      if (userStr) setCurrentAdmin(JSON.parse(userStr));
+    } catch (e) {}
   };
 
   const loadTheme = async () => {
     try {
-      const savedTheme = await AsyncStorage.getItem('admin_theme');
-      if (savedTheme && THEMES[savedTheme as keyof typeof THEMES]) {
-        setCurrentTheme(savedTheme);
-      }
-    } catch (error) {
-      console.error('Error loading theme:', error);
-    }
+      const saved = await AsyncStorage.getItem('admin_theme');
+      if (saved && THEMES[saved]) setCurrentTheme(saved);
+    } catch (e) {}
   };
 
   const saveTheme = async (themeId: string) => {
-    try {
-      await AsyncStorage.setItem('admin_theme', themeId);
-      setCurrentTheme(themeId);
-    } catch (error) {
-      console.error('Error saving theme:', error);
-    }
+    await AsyncStorage.setItem('admin_theme', themeId);
+    setCurrentTheme(themeId);
+    showToast('Theme changed');
+    setMenuVisible(false);
   };
 
-  const loadCachedData = async () => {
-    try {
-      const cachedStats = await AsyncStorage.getItem('admin_stats');
-      const cachedUsers = await AsyncStorage.getItem('admin_users');
-      const cachedRoles = await AsyncStorage.getItem('admin_roles');
-      
-      if (cachedStats) setStats(JSON.parse(cachedStats));
-      if (cachedUsers) setUsers(JSON.parse(cachedUsers));
-      if (cachedRoles) setRoles(JSON.parse(cachedRoles));
-    } catch (error) {
-      console.error('Error loading cached data:', error);
-    }
-  };
-
-  const saveToCache = async (key: string, data: any) => {
-    try {
-      await AsyncStorage.setItem(key, JSON.stringify(data));
-    } catch (error) {
-      console.error('Error saving to cache:', error);
-    }
-  };
-
-  const syncData = async () => {
-    if (!isOnline) {
-      Alert.alert('Offline', 'Cannot sync while offline. Please check your connection.');
-      return;
-    }
-    
-    setSyncing(true);
-    try {
-      const [statsRes, usersRes, rolesRes] = await Promise.all([
-        adminAPI.getUserStats(),
-        adminAPI.getUsers({ detailed: true }),
-        adminAPI.getRoles({ detailed: true })
-      ]);
-      
-      if (statsRes.status === 'success') {
-        setStats(statsRes.data);
-        saveToCache('admin_stats', statsRes.data);
-      }
-      if (usersRes.status === 'success') {
-        setUsers(usersRes.data);
-        saveToCache('admin_users', usersRes.data);
-      }
-      if (rolesRes.status === 'success') {
-        setRoles(rolesRes.data);
-        saveToCache('admin_roles', rolesRes.data);
-      }
-      
-      Alert.alert('Success', 'Data synced successfully');
-    } catch (error) {
-      Alert.alert('Error', 'Failed to sync data');
-    } finally {
-      setSyncing(false);
-    }
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setToastVisible(true);
+    Animated.sequence([
+      Animated.timing(toastAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
+      Animated.delay(2000),
+      Animated.timing(toastAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
+    ]).start(() => setToastVisible(false));
   };
 
   const loadData = async () => {
-    if (!isOnline && activeTab !== 'dashboard') {
-      return;
-    }
-    
     setLoading(true);
     try {
       if (activeTab === 'dashboard') {
-        const statsRes = await adminAPI.getUserStats();
-        if (statsRes.status === 'success') {
-          setStats(statsRes.data);
-          saveToCache('admin_stats', statsRes.data);
-        }
+        const res = await apiCall('/users/stats/', 'GET');
+        if (res.status === 'success') setStats(res.data);
       } else if (activeTab === 'users') {
-        const usersRes = await adminAPI.getUsers({ search: searchQuery, detailed: true });
-        if (usersRes.status === 'success') {
-          setUsers(usersRes.data);
-          saveToCache('admin_users', usersRes.data);
-        }
+        const res = await apiCall(`/users/?search=${searchQuery}&detailed=true`, 'GET');
+        if (res.status === 'success') setUsers(res.data);
       } else if (activeTab === 'roles') {
-        const rolesRes = await adminAPI.getRoles({ detailed: true });
-        if (rolesRes.status === 'success') {
-          setRoles(rolesRes.data);
-          saveToCache('admin_roles', rolesRes.data);
-        }
+        const res = await apiCall('/roles/?detailed=true', 'GET');
+        if (res.status === 'success') setRoles(res.data);
       }
-    } catch (error) {
-      if (!isOnline) {
-        Alert.alert('Offline', 'Showing cached data');
-      } else {
-        Alert.alert('Error', 'Failed to load data');
-      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -282,550 +245,197 @@ export default function AdminSuperDashboard() {
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    syncData();
-  }, []);
+    loadData();
+  }, [activeTab]);
 
-  // User CRUD Operations
-  const handleCreateUser = async () => {
-    if (!isOnline) {
-      Alert.alert('Offline', 'Cannot create user while offline');
-      return;
-    }
-    
+  // ==================== USER CRUD ====================
+  const createUser = async () => {
     try {
-      const response = await adminAPI.createUser(formData);
-      if (response.status === 'success') {
-        Alert.alert('Success', 'User created successfully');
+      const res = await apiCall('/users/', 'POST', form);
+      if (res.status === 'success') {
+        showToast('User created');
         setModalVisible(false);
-        syncData();
-        setFormData({});
+        loadData();
+        setForm({});
       }
     } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.message || 'Failed to create user');
+      Alert.alert('Error', error.message);
     }
   };
 
-  const handleUpdateUser = async () => {
-    if (!isOnline) {
-      Alert.alert('Offline', 'Cannot update user while offline');
-      return;
-    }
-    
+  const updateUser = async () => {
     try {
-      const response = await adminAPI.updateUser(selectedItem.id, formData);
-      if (response.status === 'success') {
-        Alert.alert('Success', 'User updated successfully');
+      const res = await apiCall(`/users/${editingItem.id}/`, 'PATCH', form);
+      if (res.status === 'success') {
+        showToast('User updated');
         setModalVisible(false);
-        syncData();
+        loadData();
       }
     } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.message || 'Failed to update user');
+      Alert.alert('Error', error.message);
     }
   };
 
-  const handleDeleteUser = async (userId: number) => {
-    if (!isOnline) {
-      Alert.alert('Offline', 'Cannot delete user while offline');
-      return;
-    }
-    
-    Alert.alert(
-      'Confirm Delete',
-      'Are you sure you want to delete this user? This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const response = await adminAPI.deleteUser(userId);
-              if (response.status === 'success') {
-                Alert.alert('Success', 'User deleted successfully');
-                syncData();
-              }
-            } catch (error) {
-              Alert.alert('Error', 'Failed to delete user');
-            }
-          },
+  const deleteUser = (id: number) => {
+    Alert.alert('Confirm', 'Delete this user?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          await apiCall(`/users/${id}/`, 'DELETE');
+          showToast('User deleted');
+          loadData();
         },
-      ]
-    );
+      },
+    ]);
   };
 
-  // Role CRUD Operations
-  const handleCreateRole = async () => {
-    if (!isOnline) {
-      Alert.alert('Offline', 'Cannot assign role while offline');
-      return;
-    }
-    
+  // ==================== ROLE CRUD ====================
+  const createRole = async () => {
     try {
-      const response = await adminAPI.createRole(formData);
-      if (response.status === 'success') {
-        Alert.alert('Success', 'Role assigned successfully');
+      const data = { ...form, assigned_by: currentAdmin?.id };
+      const res = await apiCall('/roles/', 'POST', data);
+      if (res.status === 'success') {
+        showToast('Role assigned');
         setModalVisible(false);
-        syncData();
-        setFormData({});
+        loadData();
+        setForm({});
       }
     } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.message || 'Failed to assign role');
+      Alert.alert('Error', error.message);
     }
   };
 
-  const handleUpdateRole = async () => {
-    if (!isOnline) {
-      Alert.alert('Offline', 'Cannot update role while offline');
-      return;
-    }
-    
+  const updateRole = async () => {
     try {
-      const response = await adminAPI.updateRole(selectedItem.id, formData);
-      if (response.status === 'success') {
-        Alert.alert('Success', 'Role updated successfully');
+      const data = { role: form.role, status: form.status, assigned_by: currentAdmin?.id };
+      const res = await apiCall(`/roles/${editingItem.id}/`, 'PATCH', data);
+      if (res.status === 'success') {
+        showToast('Role updated');
         setModalVisible(false);
-        syncData();
+        loadData();
       }
     } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.message || 'Failed to update role');
+      Alert.alert('Error', error.message);
     }
   };
 
-  const handleDeleteRole = async (roleId: number) => {
-    if (!isOnline) {
-      Alert.alert('Offline', 'Cannot delete role while offline');
-      return;
-    }
-    
-    Alert.alert(
-      'Confirm Delete',
-      'Are you sure you want to delete this role?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const response = await adminAPI.deleteRole(roleId);
-              if (response.status === 'success') {
-                Alert.alert('Success', 'Role deleted successfully');
-                syncData();
-              }
-            } catch (error) {
-              Alert.alert('Error', 'Failed to delete role');
-            }
-          },
+  const deleteRole = (id: number) => {
+    Alert.alert('Confirm', 'Delete this role?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          await apiCall(`/roles/${id}/`, 'DELETE');
+          showToast('Role deleted');
+          loadData();
         },
-      ]
-    );
+      },
+    ]);
   };
 
-  // Menu handlers
-  const handleMenuPress = () => setMenuVisible(true);
+  // ==================== MODAL HANDLERS ====================
+  const openCreateUser = () => {
+    setEditingItem(null);
+    setForm({});
+    setModalType('user');
+    setModalVisible(true);
+  };
+
+  const openEditUser = (user: User) => {
+    setEditingItem(user);
+    setForm({
+      full_name: user.full_name,
+      email: user.email,
+      mobile_number: user.mobile_number,
+      is_active: user.is_active,
+      is_staff: user.is_staff,
+    });
+    setModalType('user');
+    setModalVisible(true);
+  };
+
+  const openCreateRole = () => {
+    setEditingItem(null);
+    setForm({ user: '', role: 'user', status: 'active' });
+    setModalType('role');
+    setModalVisible(true);
+  };
+
+  const openEditRole = (role: Role) => {
+    setEditingItem(role);
+    setForm({
+      role: role.role,
+      status: role.status,
+      user: role.user,
+    });
+    setModalType('role');
+    setModalVisible(true);
+  };
+
+  // ==================== MENU ====================
+  const toggleMenu = () => setMenuVisible(!menuVisible);
   const closeMenu = () => setMenuVisible(false);
 
-  const handleMenuItem = (action: string) => {
+  const handleMenuAction = (screen: string) => {
     closeMenu();
-    setTimeout(() => {
-      switch(action) {
-        case 'chats':
-          router.push('/chats/manage');
-          break;
-        case 'forms':
-          router.push('/forms/manage');
-          break;
-        case 'groups':
-          router.push('/groups/manage');
-          break;
-        case 'library':
-          router.push('/library/manage');
-          break;
-        default:
-          break;
-      }
-    }, 300);
-  };
-
-  const changeTheme = (themeId: string) => {
-    saveTheme(themeId);
-    closeMenu();
+    router.push(`/${screen}/manage`);
   };
 
   useEffect(() => {
-    if (menuVisible) {
-      Animated.parallel([
-        Animated.timing(slideAnim, { toValue: 0, duration: 250, useNativeDriver: true }),
-        Animated.timing(fadeAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(slideAnim, { toValue: -300, duration: 200, useNativeDriver: true }),
-        Animated.timing(fadeAnim, { toValue: 0, duration: 150, useNativeDriver: true }),
-      ]).start();
-    }
+    Animated.parallel([
+      Animated.timing(slideAnim, { toValue: menuVisible ? 0 : -300, duration: 250, useNativeDriver: true }),
+      Animated.timing(fadeAnim, { toValue: menuVisible ? 1 : 0, duration: 200, useNativeDriver: true }),
+    ]).start();
   }, [menuVisible]);
 
-  // Render Dashboard Tab
-  const renderDashboard = () => (
-    <ScrollView 
-      showsVerticalScrollIndicator={false}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}
-    >
-      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Admin Dashboard</Text>
-        <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>Complete System Management</Text>
-      </View>
-
-      <View style={styles.statsGrid}>
-        <StatCard
-          title="Total Users"
-          value={stats?.users.total || 0}
-          icon="people"
-          color={colors.primary}
-          onPress={() => setActiveTab('users')}
-          colors={colors}
-        />
-        <StatCard
-          title="Active Users"
-          value={stats?.users.active || 0}
-          icon="checkmark-circle"
-          color={colors.success}
-          onPress={() => setActiveTab('users')}
-          colors={colors}
-        />
-        <StatCard
-          title="Total Roles"
-          value={stats?.roles.total || 0}
-          icon="shield"
-          color={colors.info}
-          onPress={() => setActiveTab('roles')}
-          colors={colors}
-        />
-        <StatCard
-          title="Online Now"
-          value={stats?.sessions.online || 0}
-          icon="wifi"
-          color={colors.warning}
-          onPress={() => setActiveTab('sessions')}
-          colors={colors}
-        />
-      </View>
-
-      <View style={[styles.section, { backgroundColor: colors.surface, margin: 16, borderRadius: 12, padding: 16 }]}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Role Distribution</Text>
-        <DistributionItem
-          label="Admin"
-          count={stats?.roles.admin || 0}
-          total={stats?.roles.total || 1}
-          color="#9C27B0"
-          colors={colors}
-        />
-        <DistributionItem
-          label="MiddleMan"
-          count={stats?.roles.middleman || 0}
-          total={stats?.roles.total || 1}
-          color="#00BCD4"
-          colors={colors}
-        />
-        <DistributionItem
-          label="User"
-          count={stats?.roles.user || 0}
-          total={stats?.roles.total || 1}
-          color="#607D8B"
-          colors={colors}
-        />
-      </View>
-
-      <View style={[styles.section, { backgroundColor: colors.surface, margin: 16, borderRadius: 12, padding: 16 }]}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>System Status</Text>
-        <View style={styles.statusContainer}>
-          <StatusItem label="Active Sessions" value={stats?.sessions.active || 0} icon="log-in" colors={colors} />
-          <StatusItem label="Verified OTPs" value={stats?.otp.verified || 0} icon="mail-open" colors={colors} />
-          <StatusItem label="Profiles" value={stats?.profiles.total || 0} icon="image" colors={colors} />
-          <StatusItem label="Staff Users" value={stats?.users.staff || 0} icon="briefcase" colors={colors} />
-        </View>
-      </View>
-
-      <View style={[styles.section, { marginHorizontal: 16, marginBottom: 30 }]}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick Actions</Text>
-        <View style={styles.quickActions}>
-          <ActionButton title="Add User" icon="person-add" color={colors.success} onPress={() => {
-            setModalType('user');
-            setSelectedItem(null);
-            setFormData({});
-            setModalVisible(true);
-          }} colors={colors} />
-          <ActionButton title="Assign Role" icon="shield" color={colors.info} onPress={() => {
-            setModalType('role');
-            setSelectedItem(null);
-            setFormData({});
-            setModalVisible(true);
-          }} colors={colors} />
-          <ActionButton title="Sync" icon="sync" color={colors.warning} onPress={syncData} colors={colors} />
-        </View>
-      </View>
-    </ScrollView>
-  );
-
-  // Render Users Tab
-  const renderUsers = () => (
-    <View style={[styles.tabContainer, { backgroundColor: colors.background }]}>
-      <View style={[styles.searchBar, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <Ionicons name="search" size={20} color={colors.textSecondary} />
-        <TextInput
-          style={[styles.searchInput, { color: colors.text }]}
-          placeholder="Search users..."
-          placeholderTextColor={colors.textSecondary}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-        {searchQuery !== '' && (
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
-          </TouchableOpacity>
-        )}
-      </View>
-
-      <TouchableOpacity style={[styles.addButton, { backgroundColor: colors.success }]} onPress={() => {
-        setModalType('user');
-        setSelectedItem(null);
-        setFormData({});
-        setModalVisible(true);
-      }}>
-        <Ionicons name="add" size={24} color="#fff" />
-        <Text style={styles.addButtonText}>Add New User</Text>
-      </TouchableOpacity>
-
-      <FlatList
-        data={users}
-        keyExtractor={(item) => item.id.toString()}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}
-        renderItem={({ item }) => (
-          <UserCard
-            user={item}
-            onEdit={() => {
-              setSelectedItem(item);
-              setFormData({
-                full_name: item.full_name,
-                email: item.email,
-                is_active: item.is_active,
-                is_staff: item.is_staff,
-              });
-              setModalType('user');
-              setModalVisible(true);
-            }}
-            onDelete={() => handleDeleteUser(item.id)}
-            colors={colors}
-          />
-        )}
-        ListEmptyComponent={() => (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="people-outline" size={64} color={colors.textSecondary} />
-            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No users found</Text>
-          </View>
-        )}
-      />
-    </View>
-  );
-
-  // Render Roles Tab
-  const renderRoles = () => (
-    <View style={[styles.tabContainer, { backgroundColor: colors.background }]}>
-      <TouchableOpacity style={[styles.addButton, { backgroundColor: colors.success }]} onPress={() => {
-        setModalType('role');
-        setSelectedItem(null);
-        setFormData({});
-        setModalVisible(true);
-      }}>
-        <Ionicons name="add" size={24} color="#fff" />
-        <Text style={styles.addButtonText}>Assign New Role</Text>
-      </TouchableOpacity>
-
-      <FlatList
-        data={roles}
-        keyExtractor={(item) => item.id.toString()}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}
-        renderItem={({ item }) => (
-          <RoleCard
-            role={item}
-            onEdit={() => {
-              setSelectedItem(item);
-              setFormData({
-                role: item.role,
-                status: item.status,
-              });
-              setModalType('role');
-              setModalVisible(true);
-            }}
-            onDelete={() => handleDeleteRole(item.id)}
-            colors={colors}
-          />
-        )}
-        ListEmptyComponent={() => (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="shield-outline" size={64} color={colors.textSecondary} />
-            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No roles found</Text>
-          </View>
-        )}
-      />
-    </View>
-  );
-
-  // Modal
-  const renderModal = () => (
-    <Modal animationType="slide" transparent={true} visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
-      <View style={styles.modalOverlay}>
-        <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
-          <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>
-              {modalType === 'user' ? (selectedItem ? 'Edit User' : 'Create User') : (selectedItem ? 'Edit Role' : 'Assign Role')}
-            </Text>
-            <TouchableOpacity onPress={() => setModalVisible(false)}>
-              <Ionicons name="close" size={24} color={colors.text} />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView showsVerticalScrollIndicator={false}>
-            {modalType === 'user' ? (
-              <View>
-                <View style={styles.inputGroup}>
-                  <Text style={[styles.label, { color: colors.text }]}>Full Name</Text>
-                  <TextInput style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} value={formData.full_name} onChangeText={(text) => setFormData({ ...formData, full_name: text })} placeholder="Enter full name" placeholderTextColor={colors.textSecondary} />
-                </View>
-                <View style={styles.inputGroup}>
-                  <Text style={[styles.label, { color: colors.text }]}>Mobile Number</Text>
-                  <TextInput style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} value={formData.mobile_number} onChangeText={(text) => setFormData({ ...formData, mobile_number: text })} placeholder="+1234567890" editable={!selectedItem} placeholderTextColor={colors.textSecondary} />
-                </View>
-                <View style={styles.inputGroup}>
-                  <Text style={[styles.label, { color: colors.text }]}>Email</Text>
-                  <TextInput style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} value={formData.email} onChangeText={(text) => setFormData({ ...formData, email: text })} placeholder="user@example.com" keyboardType="email-address" autoCapitalize="none" placeholderTextColor={colors.textSecondary} />
-                </View>
-                {!selectedItem && (
-                  <View style={styles.inputGroup}>
-                    <Text style={[styles.label, { color: colors.text }]}>Password</Text>
-                    <TextInput style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} value={formData.password} onChangeText={(text) => setFormData({ ...formData, password: text })} placeholder="Enter password" secureTextEntry placeholderTextColor={colors.textSecondary} />
-                  </View>
-                )}
-                <View style={styles.switchGroup}>
-                  <Text style={[styles.label, { color: colors.text }]}>Active Status</Text>
-                  <Switch value={formData.is_active} onValueChange={(value) => setFormData({ ...formData, is_active: value })} trackColor={{ false: '#767577', true: colors.success }} />
-                </View>
-                <View style={styles.switchGroup}>
-                  <Text style={[styles.label, { color: colors.text }]}>Staff Status</Text>
-                  <Switch value={formData.is_staff} onValueChange={(value) => setFormData({ ...formData, is_staff: value })} trackColor={{ false: '#767577', true: colors.info }} />
-                </View>
-              </View>
-            ) : (
-              <View>
-                <View style={styles.inputGroup}>
-                  <Text style={[styles.label, { color: colors.text }]}>User ID</Text>
-                  <TextInput style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} value={formData.user?.toString()} onChangeText={(text) => setFormData({ ...formData, user: parseInt(text) })} placeholder="Enter user ID" keyboardType="numeric" editable={!selectedItem} placeholderTextColor={colors.textSecondary} />
-                </View>
-                <View style={styles.inputGroup}>
-                  <Text style={[styles.label, { color: colors.text }]}>Role Type</Text>
-                  <View style={styles.radioGroup}>
-                    {['admin', 'middleman', 'user'].map((role) => (
-                      <TouchableOpacity key={role} style={[styles.radioOption, formData.role === role && styles.radioOptionSelected, { borderColor: colors.border }]} onPress={() => setFormData({ ...formData, role })}>
-                        <Text style={[styles.radioText, formData.role === role && styles.radioTextSelected, { color: formData.role === role ? '#fff' : colors.text }]}>{role.charAt(0).toUpperCase() + role.slice(1)}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-                <View style={styles.inputGroup}>
-                  <Text style={[styles.label, { color: colors.text }]}>Status</Text>
-                  <View style={styles.radioGroup}>
-                    {['active', 'inactive'].map((status) => (
-                      <TouchableOpacity key={status} style={[styles.radioOption, formData.status === status && styles.radioOptionSelected, { borderColor: colors.border }]} onPress={() => setFormData({ ...formData, status })}>
-                        <Text style={[styles.radioText, formData.status === status && styles.radioTextSelected, { color: formData.status === status ? '#fff' : colors.text }]}>{status.charAt(0).toUpperCase() + status.slice(1)}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-                <View style={styles.inputGroup}>
-                  <Text style={[styles.label, { color: colors.text }]}>Assigned By (User ID)</Text>
-                  <TextInput style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} value={formData.assigned_by?.toString()} onChangeText={(text) => setFormData({ ...formData, assigned_by: parseInt(text) })} placeholder="Enter admin user ID" keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
-                </View>
-              </View>
-            )}
-            <TouchableOpacity style={[styles.submitButton, { backgroundColor: colors.primary }]} onPress={() => {
-              if (modalType === 'user') {
-                if (selectedItem) handleUpdateUser();
-                else handleCreateUser();
-              } else {
-                if (selectedItem) handleUpdateRole();
-                else handleCreateRole();
-              }
-            }}>
-              <Text style={styles.submitButtonText}>{selectedItem ? 'Update' : 'Create'}</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
-      </View>
-    </Modal>
-  );
-
+  // ==================== RENDER ====================
   if (loading && !stats && users.length === 0 && roles.length === 0) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+      <View style={[styles.centered, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading admin panel...</Text>
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading Admin Panel...</Text>
       </View>
     );
   }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle={currentTheme === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+      <StatusBar barStyle={currentTheme === 'dark' ? 'light-content' : 'dark-content'} />
       
-      {/* Header with Back and Menu */}
-      <View style={[styles.headerBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.push('/dashboard')} style={styles.backButton}>
+      {/* Header */}
+      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        
         <View style={styles.headerCenter}>
           <Ionicons name="shield" size={20} color={colors.primary} />
-          <Text style={[styles.headerBarTitle, { color: colors.text }]}>Admin Panel</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Admin Panel</Text>
         </View>
-        
-        <View style={styles.headerRight}>
-          {syncing && <ActivityIndicator size="small" color={colors.primary} style={styles.syncIcon} />}
-          {!isOnline && <Ionicons name="cloud-offline" size={20} color={colors.error} style={styles.onlineIcon} />}
-          {isOnline && <Ionicons name="cloud-done" size={20} color={colors.success} style={styles.onlineIcon} />}
-          <TouchableOpacity onPress={handleMenuPress} style={styles.menuButton}>
-            <Ionicons name="ellipsis-vertical" size={22} color={colors.text} />
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity onPress={toggleMenu} style={styles.headerBtn}>
+          <Ionicons name="ellipsis-vertical" size={22} color={colors.text} />
+        </TouchableOpacity>
       </View>
 
       {/* Dropdown Menu */}
-      <Modal transparent={true} visible={menuVisible} animationType="none" onRequestClose={closeMenu}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={closeMenu}>
-          <Animated.View style={[styles.dropdownMenu, { backgroundColor: colors.surface, transform: [{ translateY: slideAnim }], opacity: fadeAnim }]}>
+      <Modal transparent visible={menuVisible} onRequestClose={closeMenu}>
+        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={closeMenu}>
+          <Animated.View style={[styles.dropdown, { backgroundColor: colors.surface, transform: [{ translateY: slideAnim }], opacity: fadeAnim }]}>
             <Text style={[styles.menuHeader, { color: colors.textSecondary }]}>MANAGE</Text>
-            <TouchableOpacity style={styles.menuItem} onPress={() => handleMenuItem('chats')}>
-              <Ionicons name="chatbubbles-outline" size={22} color={colors.text} />
-              <Text style={[styles.menuItemText, { color: colors.text }]}>Manage Chats</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.menuItem} onPress={() => handleMenuItem('forms')}>
-              <Ionicons name="document-text-outline" size={22} color={colors.text} />
-              <Text style={[styles.menuItemText, { color: colors.text }]}>Manage Forms</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.menuItem} onPress={() => handleMenuItem('groups')}>
-              <Ionicons name="people-outline" size={22} color={colors.text} />
-              <Text style={[styles.menuItemText, { color: colors.text }]}>Manage Groups</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.menuItem} onPress={() => handleMenuItem('library')}>
-              <Ionicons name="library-outline" size={22} color={colors.text} />
-              <Text style={[styles.menuItemText, { color: colors.text }]}>Manage Library</Text>
-            </TouchableOpacity>
-            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+            {['chats', 'forms', 'groups', 'library'].map(item => (
+              <TouchableOpacity key={item} style={styles.menuItem} onPress={() => handleMenuAction(item)}>
+                <Ionicons name={item === 'chats' ? 'chatbubbles-outline' : item === 'forms' ? 'document-text-outline' : item === 'groups' ? 'people-outline' : 'library-outline'} size={22} color={colors.text} />
+                <Text style={[styles.menuText, { color: colors.text }]}>Manage {item.charAt(0).toUpperCase() + item.slice(1)}</Text>
+              </TouchableOpacity>
+            ))}
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
             <Text style={[styles.menuHeader, { color: colors.textSecondary }]}>THEMES</Text>
-            {Object.entries(THEMES).map(([key, themeData]) => (
-              <TouchableOpacity key={key} style={styles.menuItem} onPress={() => changeTheme(key)}>
-                <Ionicons name={themeData.icon as any} size={22} color={currentTheme === key ? colors.primary : colors.text} />
-                <Text style={[styles.menuItemText, { color: colors.text }, currentTheme === key && { color: colors.primary, fontWeight: '600' }]}>{themeData.name}</Text>
+            {Object.entries(THEMES).map(([key, t]) => (
+              <TouchableOpacity key={key} style={styles.menuItem} onPress={() => saveTheme(key)}>
+                <Ionicons name={t.icon} size={22} color={currentTheme === key ? colors.primary : colors.text} />
+                <Text style={[styles.menuText, { color: currentTheme === key ? colors.primary : colors.text }]}>{t.name}</Text>
                 {currentTheme === key && <Ionicons name="checkmark" size={20} color={colors.primary} style={{ marginLeft: 'auto' }} />}
               </TouchableOpacity>
             ))}
@@ -834,76 +444,245 @@ export default function AdminSuperDashboard() {
       </Modal>
 
       {/* Content */}
-      {activeTab === 'dashboard' && renderDashboard()}
-      {activeTab === 'users' && renderUsers()}
-      {activeTab === 'roles' && renderRoles()}
+      <ScrollView
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Dashboard Tab */}
+        {activeTab === 'dashboard' && (
+          <View>
+            <View style={styles.statsGrid}>
+              <StatCard colors={colors} title="Total Users" value={stats?.users.total || 0} icon="people" color={colors.primary} onPress={() => setActiveTab('users')} />
+              <StatCard colors={colors} title="Active Users" value={stats?.users.active || 0} icon="checkmark-circle" color={colors.success} onPress={() => setActiveTab('users')} />
+              <StatCard colors={colors} title="Total Roles" value={stats?.roles.total || 0} icon="shield" color={colors.info} onPress={() => setActiveTab('roles')} />
+              <StatCard colors={colors} title="Staff Users" value={stats?.users.staff || 0} icon="briefcase" color={colors.warning} onPress={() => setActiveTab('users')} />
+            </View>
 
-      {/* Bottom Tab Bar */}
-      <View style={[styles.bottomTab, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-        <TouchableOpacity style={[styles.tabItem, activeTab === 'dashboard' && { borderTopColor: colors.primary }]} onPress={() => setActiveTab('dashboard')}>
-          <Ionicons name={activeTab === 'dashboard' ? "grid" : "grid-outline"} size={22} color={activeTab === 'dashboard' ? colors.primary : colors.textSecondary} />
-          <Text style={[styles.tabLabel, { color: activeTab === 'dashboard' ? colors.primary : colors.textSecondary }]}>Dashboard</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.tabItem, activeTab === 'users' && { borderTopColor: colors.primary }]} onPress={() => setActiveTab('users')}>
-          <Ionicons name={activeTab === 'users' ? "people" : "people-outline"} size={22} color={activeTab === 'users' ? colors.primary : colors.textSecondary} />
-          <Text style={[styles.tabLabel, { color: activeTab === 'users' ? colors.primary : colors.textSecondary }]}>Users</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.tabItem, activeTab === 'roles' && { borderTopColor: colors.primary }]} onPress={() => setActiveTab('roles')}>
-          <Ionicons name={activeTab === 'roles' ? "shield" : "shield-outline"} size={22} color={activeTab === 'roles' ? colors.primary : colors.textSecondary} />
-          <Text style={[styles.tabLabel, { color: activeTab === 'roles' ? colors.primary : colors.textSecondary }]}>Roles</Text>
-        </TouchableOpacity>
+            <View style={[styles.sectionCard, { backgroundColor: colors.surface }]}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Role Distribution</Text>
+              <ProgressBar colors={colors} label="Admin" count={stats?.roles.admin || 0} total={stats?.roles.total || 1} color="#9C27B0" />
+              <ProgressBar colors={colors} label="MiddleMan" count={stats?.roles.middleman || 0} total={stats?.roles.total || 1} color="#00BCD4" />
+              <ProgressBar colors={colors} label="User" count={stats?.roles.user || 0} total={stats?.roles.total || 1} color="#607D8B" />
+            </View>
+
+            <View style={styles.actionRow}>
+              <TouchableOpacity style={[styles.actionBtn, { backgroundColor: colors.success }]} onPress={openCreateUser}>
+                <Ionicons name="person-add" size={20} color="#fff" />
+                <Text style={styles.actionBtnText}>Add User</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.actionBtn, { backgroundColor: colors.info }]} onPress={openCreateRole}>
+                <Ionicons name="shield" size={20} color="#fff" />
+                <Text style={styles.actionBtnText}>Assign Role</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Users Tab */}
+        {activeTab === 'users' && (
+          <View style={styles.tabContent}>
+            <View style={[styles.searchBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Ionicons name="search" size={20} color={colors.textSecondary} />
+              <TextInput
+                style={[styles.searchInput, { color: colors.text }]}
+                placeholder="Search users..."
+                placeholderTextColor={colors.textSecondary}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+              {searchQuery !== '' && (
+                <TouchableOpacity onPress={() => setSearchQuery('')}>
+                  <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
+                </TouchableOpacity>
+              )}
+            </View>
+            <TouchableOpacity style={[styles.addBtn, { backgroundColor: colors.success }]} onPress={openCreateUser}>
+              <Ionicons name="add" size={24} color="#fff" />
+              <Text style={styles.addBtnText}>Add New User</Text>
+            </TouchableOpacity>
+            {users.map(user => (
+              <UserCard key={user.id} colors={colors} user={user} onEdit={() => openEditUser(user)} onDelete={() => deleteUser(user.id)} />
+            ))}
+            {users.length === 0 && (
+              <View style={styles.emptyState}>
+                <Ionicons name="people-outline" size={64} color={colors.textSecondary} />
+                <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No users found</Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Roles Tab */}
+        {activeTab === 'roles' && (
+          <View style={styles.tabContent}>
+            <TouchableOpacity style={[styles.addBtn, { backgroundColor: colors.success }]} onPress={openCreateRole}>
+              <Ionicons name="add" size={24} color="#fff" />
+              <Text style={styles.addBtnText}>Assign New Role</Text>
+            </TouchableOpacity>
+            {roles.map(role => (
+              <RoleCard key={role.id} colors={colors} role={role} onEdit={() => openEditRole(role)} onDelete={() => deleteRole(role.id)} />
+            ))}
+            {roles.length === 0 && (
+              <View style={styles.emptyState}>
+                <Ionicons name="shield-outline" size={64} color={colors.textSecondary} />
+                <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No roles found</Text>
+              </View>
+            )}
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Bottom Tabs */}
+      <View style={[styles.bottomTabs, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+        <TabButton activeTab={activeTab} tab="dashboard" icon="grid" label="Dashboard" colors={colors} onPress={() => setActiveTab('dashboard')} />
+        <TabButton activeTab={activeTab} tab="users" icon="people" label="Users" colors={colors} onPress={() => setActiveTab('users')} />
+        <TabButton activeTab={activeTab} tab="roles" icon="shield" label="Roles" colors={colors} onPress={() => setActiveTab('roles')} />
       </View>
 
       {/* Modal */}
-      {renderModal()}
+      <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={() => setModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>
+                {modalType === 'user' ? (editingItem ? 'Edit User' : 'Create User') : (editingItem ? 'Edit Role' : 'Assign Role')}
+              </Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)}>
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {modalType === 'user' ? (
+                <View>
+                  <InputField colors={colors} label="Full Name" value={form.full_name} onChange={(v) => setForm({ ...form, full_name: v })} />
+                  <InputField colors={colors} label="Mobile Number" value={form.mobile_number} onChange={(v) => setForm({ ...form, mobile_number: v })} editable={!editingItem} />
+                  <InputField colors={colors} label="Email" value={form.email} onChange={(v) => setForm({ ...form, email: v })} keyboard="email-address" />
+                  {!editingItem && <InputField colors={colors} label="Password" value={form.password} onChange={(v) => setForm({ ...form, password: v })} secure />}
+                  <View style={styles.switchRow}>
+                    <Text style={{ color: colors.text }}>Active Status</Text>
+                    <Switch value={form.is_active} onValueChange={(v) => setForm({ ...form, is_active: v })} trackColor={{ false: '#767577', true: colors.success }} />
+                  </View>
+                  <View style={styles.switchRow}>
+                    <Text style={{ color: colors.text }}>Staff Status</Text>
+                    <Switch value={form.is_staff} onValueChange={(v) => setForm({ ...form, is_staff: v })} trackColor={{ false: '#767577', true: colors.info }} />
+                  </View>
+                </View>
+              ) : (
+                <View>
+                  <Text style={[styles.label, { color: colors.text }]}>Select User</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.userScroll}>
+                    {users.map(u => (
+                      <TouchableOpacity
+                        key={u.id}
+                        style={[styles.userChip, { backgroundColor: colors.background, borderColor: colors.border }, form.user === u.id && { backgroundColor: colors.info + '20', borderColor: colors.info }]}
+                        onPress={() => setForm({ ...form, user: u.id })}
+                      >
+                        <View style={[styles.userChipAvatar, { backgroundColor: colors.info }]}>
+                          <Text style={styles.userChipInitial}>{u.full_name?.charAt(0) || u.mobile_number.charAt(0)}</Text>
+                        </View>
+                        <Text style={[styles.userChipName, { color: colors.text }]} numberOfLines={1}>{u.full_name || u.mobile_number}</Text>
+                        {form.user === u.id && <Ionicons name="checkmark-circle" size={16} color={colors.success} />}
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                  {form.user && (
+                    <Text style={[styles.selectedHint, { color: colors.success }]}>✓ Selected User ID: {form.user}</Text>
+                  )}
+
+                  <Text style={[styles.label, { color: colors.text }]}>Role Type</Text>
+                  <View style={styles.radioGroup}>
+                    {['admin', 'middleman', 'user'].map(r => (
+                      <TouchableOpacity
+                        key={r}
+                        style={[styles.radioOption, form.role === r && styles.radioSelected, { borderColor: colors.border }]}
+                        onPress={() => setForm({ ...form, role: r })}
+                      >
+                        <Text style={[styles.radioText, { color: form.role === r ? '#fff' : colors.text }]}>{r.charAt(0).toUpperCase() + r.slice(1)}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <Text style={[styles.label, { color: colors.text }]}>Status</Text>
+                  <View style={styles.radioGroup}>
+                    {['active', 'inactive'].map(s => (
+                      <TouchableOpacity
+                        key={s}
+                        style={[styles.radioOption, form.status === s && styles.radioSelected, { borderColor: colors.border }]}
+                        onPress={() => setForm({ ...form, status: s })}
+                      >
+                        <Text style={[styles.radioText, { color: form.status === s ? '#fff' : colors.text }]}>{s.charAt(0).toUpperCase() + s.slice(1)}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <View style={[styles.infoBox, { backgroundColor: colors.info + '20' }]}>
+                    <Ionicons name="information-circle" size={20} color={colors.info} />
+                    <Text style={[styles.infoText, { color: colors.textSecondary }]}>Assigned by: {currentAdmin?.full_name || currentAdmin?.mobile_number || 'Admin'} (Auto-filled)</Text>
+                  </View>
+                </View>
+              )}
+              <TouchableOpacity style={[styles.submitBtn, { backgroundColor: colors.primary }]} onPress={() => {
+                if (modalType === 'user') {
+                  editingItem ? updateUser() : createUser();
+                } else {
+                  editingItem ? updateRole() : createRole();
+                }
+              }}>
+                <Text style={styles.submitBtnText}>{editingItem ? 'Update' : 'Create'}</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Success Toast */}
+      {toastVisible && (
+        <Animated.View style={[styles.toast, { backgroundColor: colors.success, opacity: toastAnim }]}>
+          <Ionicons name="checkmark-circle" size={24} color="#fff" />
+          <Text style={styles.toastText}>{toastMessage}</Text>
+        </Animated.View>
+      )}
     </View>
   );
 }
 
-// Helper Components
-const StatCard = ({ title, value, icon, color, onPress, colors }: any) => (
+// ==================== COMPONENTS ====================
+
+const StatCard = ({ colors, title, value, icon, color, onPress }: any) => (
   <TouchableOpacity style={[styles.statCard, { backgroundColor: colors.surface, borderLeftColor: color }]} onPress={onPress}>
-    <View style={[styles.statIconBg, { backgroundColor: color + '20' }]}>
+    <View style={[styles.statIcon, { backgroundColor: color + '20' }]}>
       <Ionicons name={icon} size={24} color={color} />
     </View>
-    <View style={styles.statContent}>
+    <View>
       <Text style={[styles.statValue, { color: colors.text }]}>{value}</Text>
-      <Text style={[styles.statTitle, { color: colors.textSecondary }]}>{title}</Text>
+      <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{title}</Text>
     </View>
   </TouchableOpacity>
 );
 
-const DistributionItem = ({ label, count, total, color, colors }: any) => (
-  <View style={styles.distributionItem}>
-    <View style={styles.distributionHeader}>
-      <Text style={[styles.distributionLabel, { color: colors.textSecondary }]}>{label}</Text>
-      <Text style={[styles.distributionCount, { color: colors.text }]}>{count}</Text>
+const ProgressBar = ({ colors, label, count, total, color }: any) => (
+  <View style={styles.progressItem}>
+    <View style={styles.progressHeader}>
+      <Text style={{ color: colors.textSecondary }}>{label}</Text>
+      <Text style={{ color: colors.text, fontWeight: '600' }}>{count}</Text>
     </View>
-    <View style={[styles.progressBar, { backgroundColor: colors.border }]}>
+    <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
       <View style={[styles.progressFill, { width: `${(count / total) * 100}%`, backgroundColor: color }]} />
     </View>
   </View>
 );
 
-const StatusItem = ({ label, value, icon, colors }: any) => (
-  <View style={[styles.statusItem, { backgroundColor: colors.surface }]}>
-    <Ionicons name={icon} size={24} color={colors.success} />
-    <Text style={[styles.statusValue, { color: colors.text }]}>{value}</Text>
-    <Text style={[styles.statusLabel, { color: colors.textSecondary }]}>{label}</Text>
-  </View>
-);
-
-const ActionButton = ({ title, icon, color, onPress, colors }: any) => (
-  <TouchableOpacity style={[styles.actionButton, { backgroundColor: color }]} onPress={onPress}>
-    <Ionicons name={icon} size={20} color="#fff" />
-    <Text style={styles.actionButtonText}>{title}</Text>
+const TabButton = ({ activeTab, tab, icon, label, colors, onPress }: any) => (
+  <TouchableOpacity style={[styles.tab, activeTab === tab && { borderTopColor: colors.primary }]} onPress={onPress}>
+    <Ionicons name={activeTab === tab ? icon : `${icon}-outline`} size={22} color={activeTab === tab ? colors.primary : colors.textSecondary} />
+    <Text style={[styles.tabLabel, { color: activeTab === tab ? colors.primary : colors.textSecondary }]}>{label}</Text>
   </TouchableOpacity>
 );
 
-const UserCard = ({ user, onEdit, onDelete, colors }: any) => (
+const UserCard = ({ colors, user, onEdit, onDelete }: any) => (
   <View style={[styles.card, { backgroundColor: colors.surface }]}>
     <View style={styles.cardHeader}>
-      <View style={[styles.avatarContainer, { backgroundColor: colors.info }]}>
+      <View style={[styles.avatar, { backgroundColor: colors.info }]}>
         <Text style={styles.avatarText}>{user.full_name?.charAt(0) || user.mobile_number.charAt(0)}</Text>
       </View>
       <View style={styles.cardInfo}>
@@ -929,12 +708,12 @@ const UserCard = ({ user, onEdit, onDelete, colors }: any) => (
           <Text style={[styles.badgeText, { color: colors.info }]}>{user.user_role.role_display}</Text>
         </View>
       )}
-      <Text style={[styles.cardDate, { color: colors.textSecondary }]}>Joined: {new Date(user.date_joined).toLocaleDateString()}</Text>
+      <Text style={[styles.cardDate, { color: colors.textSecondary }]}>ID: {user.id}</Text>
     </View>
   </View>
 );
 
-const RoleCard = ({ role, onEdit, onDelete, colors }: any) => (
+const RoleCard = ({ colors, role, onEdit, onDelete }: any) => (
   <View style={[styles.card, { backgroundColor: colors.surface }]}>
     <View style={styles.cardHeader}>
       <View style={[styles.roleIcon, { backgroundColor: role.role === 'admin' ? '#9C27B020' : role.role === 'middleman' ? '#00BCD420' : '#607D8B20' }]}>
@@ -956,422 +735,126 @@ const RoleCard = ({ role, onEdit, onDelete, colors }: any) => (
     </View>
     <View style={[styles.cardFooter, { borderTopColor: colors.border }]}>
       <Text style={[styles.cardDate, { color: colors.textSecondary }]}>Assigned: {new Date(role.assigned_at).toLocaleDateString()}</Text>
+      <Text style={[styles.cardDate, { color: colors.textSecondary, marginLeft: 12 }]}>Role ID: {role.id}</Text>
     </View>
   </View>
 );
 
+const InputField = ({ colors, label, value, onChange, editable = true, keyboard = 'default', secure = false }: any) => (
+  <View style={styles.inputGroup}>
+    <Text style={[styles.label, { color: colors.text }]}>{label}</Text>
+    <TextInput
+      style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
+      value={value}
+      onChangeText={onChange}
+      editable={editable}
+      keyboardType={keyboard}
+      secureTextEntry={secure}
+      placeholderTextColor={colors.textSecondary}
+    />
+  </View>
+);
+
+// ==================== STYLES ====================
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  headerBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 50 : 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-  },
-  backButton: {
-    padding: 4,
-  },
-  headerCenter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  headerBarTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  syncIcon: {
-    marginRight: 4,
-  },
-  onlineIcon: {
-    marginRight: 4,
-  },
-  menuButton: {
-    padding: 4,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  dropdownMenu: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 100 : 66,
-    right: 12,
-    borderRadius: 12,
-    paddingVertical: 8,
-    minWidth: 220,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 5,
-    zIndex: 1000,
-  },
-  menuHeader: {
-    fontSize: 12,
-    fontWeight: '600',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    letterSpacing: 0.5,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    gap: 12,
-  },
-  menuItemText: {
-    fontSize: 15,
-  },
-  menuDivider: {
-    height: 1,
-    marginVertical: 4,
-  },
+  container: { flex: 1 },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { marginTop: 12, fontSize: 16 },
+  
+  // Header
   header: {
-    padding: 20,
-    borderBottomWidth: 1,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    marginTop: 4,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    padding: 12,
-    justifyContent: 'space-between',
-  },
-  statCard: {
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    width: '48%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderLeftWidth: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  statIconBg: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  statContent: {
-    flex: 1,
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  statTitle: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  section: {
-    marginTop: 16,
-    paddingHorizontal: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-  distributionItem: {
-    marginBottom: 16,
-  },
-  distributionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  distributionLabel: {
-    fontSize: 14,
-  },
-  distributionCount: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  progressBar: {
-    height: 8,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  statusContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  statusItem: {
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    width: '48%',
-    marginBottom: 12,
-  },
-  statusValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginTop: 8,
-  },
-  statusLabel: {
-    fontSize: 12,
-    marginTop: 4,
-  },
-  quickActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 12,
-    borderRadius: 8,
-    marginHorizontal: 4,
-  },
-  actionButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  tabContainer: {
-    flex: 1,
-    padding: 16,
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    marginBottom: 16,
-    borderWidth: 1,
-  },
-  searchInput: {
-    flex: 1,
-    paddingVertical: 12,
-    marginLeft: 8,
-    fontSize: 16,
-  },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
-  },
-  addButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  card: {
-    borderRadius: 12,
-    marginBottom: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatarContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  avatarText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  roleIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  cardInfo: {
-    flex: 1,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  cardSubtitle: {
-    fontSize: 14,
-    marginTop: 2,
-  },
-  cardEmail: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  cardActions: {
-    flexDirection: 'row',
-  },
-  actionIcon: {
-    padding: 8,
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-  },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    marginRight: 8,
-  },
-  badgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  cardDate: {
-    fontSize: 11,
-    marginLeft: 'auto',
-  },
-  bottomTab: {
-    flexDirection: 'row',
-    borderTopWidth: 1,
-    paddingVertical: 8,
-    paddingBottom: Platform.OS === 'ios' ? 28 : 16,
-  },
-  tabItem: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    borderTopWidth: 2,
-    borderTopColor: 'transparent',
-    gap: 4,
-  },
-  tabLabel: {
-    fontSize: 11,
-  },
-  modalContent: {
-    borderRadius: 20,
-    padding: 20,
-    width: '90%',
-    maxHeight: '80%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  inputGroup: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-  },
-  switchGroup: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  radioGroup: {
-    flexDirection: 'row',
-  },
-  radioOption: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 8,
-    marginHorizontal: 4,
-  },
-  radioOptionSelected: {
-    backgroundColor: '#000',
-    borderColor: '#000',
-  },
-  radioText: {
-    fontSize: 14,
-  },
-  radioTextSelected: {
-    color: '#fff',
-  },
-  submitButton: {
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  submitButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    padding: 40,
-  },
-  emptyText: {
-    marginTop: 12,
-    fontSize: 16,
-  },
+     flexDirection: 'row',
+      alignItems: 'center',
+       justifyContent: 'space-between',
+        paddingHorizontal: 16,
+         paddingTop: Platform.OS === 'ios' ? 50 : 66,
+          paddingBottom: 12, borderBottomWidth: 1 
+    
+    },
+  headerBtn: { padding: 4 },
+  headerCenter: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerTitle: { fontSize: 18, fontWeight: '600' },
+  
+  // Dropdown
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+  dropdown: { position: 'absolute', top: Platform.OS === 'ios' ? 100 : 66, right: 12, borderRadius: 12, paddingVertical: 8, minWidth: 220, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 5, zIndex: 1000 },
+  menuHeader: { fontSize: 12, fontWeight: '600', paddingHorizontal: 16, paddingVertical: 8, letterSpacing: 0.5 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, gap: 12 },
+  menuText: { fontSize: 15 },
+  divider: { height: 1, marginVertical: 4 },
+  
+  // Dashboard
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', padding: 12, justifyContent: 'space-between' },
+  statCard: { borderRadius: 12, padding: 16, marginBottom: 12, width: '48%', flexDirection: 'row', alignItems: 'center', borderLeftWidth: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
+  statIcon: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  statValue: { fontSize: 24, fontWeight: 'bold' },
+  statLabel: { fontSize: 12, marginTop: 2 },
+  sectionCard: { margin: 16, borderRadius: 12, padding: 16 },
+  sectionTitle: { fontSize: 18, fontWeight: '600', marginBottom: 12 },
+  progressItem: { marginBottom: 16 },
+  progressHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  progressTrack: { height: 8, borderRadius: 4, overflow: 'hidden' },
+  progressFill: { height: '100%', borderRadius: 4 },
+  actionRow: { flexDirection: 'row', paddingHorizontal: 16, paddingBottom: 30, gap: 12 },
+  actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, borderRadius: 8, gap: 8 },
+  actionBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  
+  // Users/Roles Tabs
+  tabContent: { padding: 16 },
+  searchBox: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, paddingHorizontal: 12, marginBottom: 16, borderWidth: 1 },
+  searchInput: { flex: 1, paddingVertical: 12, marginLeft: 8, fontSize: 16 },
+  addBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 12, padding: 12, marginBottom: 16 },
+  addBtnText: { color: '#fff', fontSize: 16, fontWeight: '600', marginLeft: 8 },
+  emptyState: { alignItems: 'center', padding: 40 },
+  emptyText: { marginTop: 12, fontSize: 16 },
+  
+  // Cards
+  card: { borderRadius: 12, marginBottom: 12, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
+  cardHeader: { flexDirection: 'row', alignItems: 'center' },
+  avatar: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  avatarText: { fontSize: 20, fontWeight: 'bold', color: '#fff' },
+  roleIcon: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  cardInfo: { flex: 1 },
+  cardTitle: { fontSize: 16, fontWeight: '600' },
+  cardSubtitle: { fontSize: 14, marginTop: 2 },
+  cardEmail: { fontSize: 12, marginTop: 2 },
+  cardActions: { flexDirection: 'row' },
+  actionIcon: { padding: 8 },
+  cardFooter: { flexDirection: 'row', alignItems: 'center', marginTop: 12, paddingTop: 12, borderTopWidth: 1 },
+  badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginRight: 8 },
+  badgeText: { fontSize: 12, fontWeight: '600' },
+  cardDate: { fontSize: 11, marginLeft: 'auto' },
+  
+  // Bottom Tabs
+  bottomTabs: { flexDirection: 'row', borderTopWidth: 1, paddingVertical: 8, paddingBottom: Platform.OS === 'ios' ? 28 : 46 },
+  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderTopWidth: 2, borderTopColor: 'transparent', gap: 4 },
+  tabLabel: { fontSize: 11 },
+  
+  // Modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { borderRadius: 20, padding: 20, width: '90%', maxHeight: '80%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  modalTitle: { fontSize: 20, fontWeight: 'bold' },
+  inputGroup: { marginBottom: 16 },
+  label: { fontSize: 14, fontWeight: '600', marginBottom: 8 },
+  input: { borderWidth: 1, borderRadius: 8, padding: 12, fontSize: 16 },
+  switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  radioGroup: { flexDirection: 'row', marginBottom: 16 },
+  radioOption: { flex: 1, paddingVertical: 10, alignItems: 'center', borderWidth: 1, borderRadius: 8, marginHorizontal: 4 },
+  radioSelected: { backgroundColor: '#000', borderColor: '#000' },
+  radioText: { fontSize: 14 },
+  userScroll: { marginBottom: 8, maxHeight: 100 },
+  userChip: { flexDirection: 'row', alignItems: 'center', padding: 8, marginRight: 12, borderRadius: 8, borderWidth: 1, gap: 8 },
+  userChipAvatar: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+  userChipInitial: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  userChipName: { fontSize: 14, maxWidth: 100 },
+  selectedHint: { fontSize: 12, marginBottom: 16 },
+  infoBox: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 8, marginTop: 8, marginBottom: 16, gap: 8 },
+  infoText: { fontSize: 12, flex: 1 },
+  submitBtn: { borderRadius: 8, padding: 16, alignItems: 'center', marginTop: 20 },
+  submitBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  
+  // Toast
+  toast: { position: 'absolute', bottom: 100, left: 20, right: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, borderRadius: 8, gap: 8, zIndex: 1000 },
+  toastText: { color: '#fff', fontSize: 14, fontWeight: '600' },
 });
