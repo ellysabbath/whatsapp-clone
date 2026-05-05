@@ -1,6 +1,6 @@
+// lib/api/axiosInstance.ts
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import API_CONFIG from './_config';
 import { Platform } from 'react-native';
 
 // ======================== CONFIGURATION ========================
@@ -9,17 +9,9 @@ import { Platform } from 'react-native';
  * Get the correct base URL for the platform
  * Ensures trailing slash for proper URL concatenation
  */
-const getBaseUrl = (): string => {
-  if (__DEV__) {
-    if (Platform.OS === 'android') {
-      // Android emulator uses 10.0.2.2 to access host machine
-      return 'https://aptecProject.pythonanywhere.com/api/';
-    }
-    // iOS simulator or physical device - use your computer's IP
-    return 'https://aptecProject.pythonanywhere.com/api/';
-  }
+export const getBaseUrl = (): string => {
   // Production URL
-  return API_CONFIG.BASE_URL.endsWith('/') ? API_CONFIG.BASE_URL : `${API_CONFIG.BASE_URL}/`;
+  return 'https://aptecProject.pythonanywhere.com/api/';
 };
 
 /**
@@ -45,7 +37,7 @@ export const getWebSocketUrl = (path: string): string => {
 
 const axiosInstance = axios.create({
   baseURL: getBaseUrl(),
-  timeout: API_CONFIG.TIMEOUT,
+  timeout: 30000000,
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',

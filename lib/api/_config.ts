@@ -21,6 +21,35 @@ export const API_CONFIG = {
     DELETE_PROFILE_FIELD: '/profile/field/',
     DELETE_ACCOUNT: '/profile/delete-account/',
     
+    // Admin User Management
+    ADMIN_USERS: '/users/',
+    ADMIN_USER_DETAIL: '/users/:userId/',
+    ADMIN_USER_ROLE: '/users/:userId/role/',
+    ADMIN_USER_PROFILE: '/users/:userId/profile/',
+    ADMIN_USERS_BY_ROLE: '/users/role/:roleType/',
+    ADMIN_USER_STATS: '/users/stats/',
+    
+    // Admin Role Management
+    ADMIN_ROLES: '/roles/',
+    ADMIN_ROLE_DETAIL: '/roles/:roleId/',
+    ADMIN_ROLES_BY_TYPE: '/roles/type/:roleType/',
+    ADMIN_ROLES_BY_STATUS: '/roles/status/:statusType/',
+    ADMIN_ROLE_STATS: '/roles/stats/',
+    ADMIN_ROLE_SEARCH: '/roles/search/',
+    ADMIN_ROLE_BULK_UPDATE: '/roles/bulk/update/',
+    
+    // Admin OTP Management
+    ADMIN_OTPS: '/otps/',
+    ADMIN_OTP_DETAIL: '/otps/:otpId/',
+    
+    // Admin Session Management
+    ADMIN_SESSIONS: '/sessions/',
+    ADMIN_SESSION_DETAIL: '/sessions/:sessionId/',
+    
+    // Admin Profile Management
+    ADMIN_PROFILES: '/profiles/',
+    ADMIN_PROFILE_DETAIL: '/profiles/:profileId/',
+    
     // Chat endpoints
     CHATS: '/chats/',
     ARCHIVED_CHATS: '/chats/archive/',

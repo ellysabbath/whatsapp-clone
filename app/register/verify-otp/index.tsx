@@ -133,7 +133,7 @@ export default function VerifyOTPScreen() {
         
         <Text style={styles.title}>Check your email</Text>
         <Text style={styles.subtitle}>
-          We've sent a verification code to{'\n'}
+          We`ve sent a verification code to{'\n'}
           <Text style={styles.email}>{email}</Text>
         </Text>
 

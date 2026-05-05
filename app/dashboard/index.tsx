@@ -607,6 +607,9 @@ export default function ChatsScreen() {
         case 'shareQR':
           router.push('/dashboard/qr');
           break;
+        case 'admin':
+          router.push('/admin');
+          break;
         case 'settings':
           router.push('/dashboard/set');
           break;
@@ -791,7 +794,7 @@ export default function ChatsScreen() {
         </View>
       </View>
 
-      {/* Dropdown Menu - Added Share/QR Code option */}
+      {/* Dropdown Menu - Added Admin option */}
       <Modal transparent={true} visible={menuVisible} animationType="none" onRequestClose={closeMenu}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={closeMenu}>
           <Animated.View style={[styles.dropdownMenu, { backgroundColor: colors.surface, transform: [{ translateY: slideAnim }], opacity: fadeAnim }]}>
@@ -808,9 +811,15 @@ export default function ChatsScreen() {
               <Text style={[styles.menuItemText, { color: colors.text }]}>Starred messages</Text>
             </TouchableOpacity>
             
-            {/* New Share/QR Code Menu Item */}
+            {/* Admin Panel Option */}
+            <TouchableOpacity style={styles.menuItem} onPress={() => handleMenuItem('admin')}>
+              <Ionicons name="shield-outline" size={22} color={colors.primary} />
+              <Text style={[styles.menuItemText, { color: colors.text, fontWeight: '600' }]}>Admin Panel</Text>
+            </TouchableOpacity>
+            
+            {/* Share/QR Code Menu Item */}
             <TouchableOpacity style={styles.menuItem} onPress={() => handleMenuItem('shareQR')}>
-              <Ionicons name="qr-code-outline" size={22} color={colors.primary} />
+              <Ionicons name="qr-code-outline" size={22} color={colors.text} />
               <Text style={[styles.menuItemText, { color: colors.text }]}>Share QR Code</Text>
             </TouchableOpacity>
             
@@ -872,6 +881,12 @@ export default function ChatsScreen() {
           onPress={() => setSelectedFilter('groups')}
         >
           <Text style={[styles.filterText, { color: colors.text }, selectedFilter === 'groups' && { color: colors.primary, fontWeight: '600' }]}>Groups</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.filterTab, selectedFilter === 'archived' && { backgroundColor: colors.primary + '20' }]}
+          onPress={() => setSelectedFilter('archived')}
+        >
+          <Text style={[styles.filterText, { color: colors.text }, selectedFilter === 'archived' && { color: colors.primary, fontWeight: '600' }]}>Archived</Text>
         </TouchableOpacity>
       </View>
 
