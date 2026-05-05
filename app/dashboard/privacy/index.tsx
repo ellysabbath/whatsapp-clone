@@ -1,11 +1,173 @@
 // app/privacy-settings.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Alert, Platform, ScrollView, StatusBar, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Theme definitions
+const THEMES = {
+  light: {
+    id: 'light',
+    colors: {
+      primary: '#075E54',
+      primaryLight: '#e8f5e9',
+      success: '#25D366',
+      danger: '#FF3B30',
+      background: '#F0F2F5',
+      cardBg: '#FFFFFF',
+      surface: '#FFFFFF',
+      text: '#000000',
+      textSecondary: '#666666',
+      textTertiary: '#999999',
+      border: '#E0E0E0',
+      placeholder: '#CCCCCC',
+      info: '#666666',
+      modalBg: '#FFFFFF',
+    }
+  },
+  dark: {
+    id: 'dark',
+    colors: {
+      primary: '#128C7E',
+      primaryLight: '#1a2f2a',
+      success: '#25D366',
+      danger: '#FF5C5C',
+      background: '#111B21',
+      cardBg: '#202C33',
+      surface: '#202C33',
+      text: '#E9EDEF',
+      textSecondary: '#AEBAC1',
+      textTertiary: '#8696A0',
+      border: '#2A3942',
+      placeholder: '#3D4B55',
+      info: '#AEBAC1',
+      modalBg: '#202C33',
+    }
+  },
+  whatsappGreen: {
+    id: 'whatsappGreen',
+    colors: {
+      primary: '#25D366',
+      primaryLight: '#e8f5e9',
+      success: '#25D366',
+      danger: '#FF3B30',
+      background: '#F0F2F5',
+      cardBg: '#FFFFFF',
+      surface: '#FFFFFF',
+      text: '#111B21',
+      textSecondary: '#54656F',
+      textTertiary: '#8696A0',
+      border: '#E9EDEF',
+      placeholder: '#CCCCCC',
+      info: '#54656F',
+      modalBg: '#FFFFFF',
+    }
+  },
+  midnightBlue: {
+    id: 'midnightBlue',
+    colors: {
+      primary: '#1E88E5',
+      primaryLight: '#102a44',
+      success: '#1E88E5',
+      danger: '#FF6B6B',
+      background: '#0A1929',
+      cardBg: '#132F4C',
+      surface: '#132F4C',
+      text: '#FFFFFF',
+      textSecondary: '#B0C4DE',
+      textTertiary: '#7B9BB5',
+      border: '#1E3A5F',
+      placeholder: '#2C4A6E',
+      info: '#B0C4DE',
+      modalBg: '#132F4C',
+    }
+  },
+  sunsetOrange: {
+    id: 'sunsetOrange',
+    colors: {
+      primary: '#FF5722',
+      primaryLight: '#FFE0B2',
+      success: '#FF5722',
+      danger: '#D84315',
+      background: '#FFF3E0',
+      cardBg: '#FFFFFF',
+      surface: '#FFE0B2',
+      text: '#4E342E',
+      textSecondary: '#8D6E63',
+      textTertiary: '#A1887F',
+      border: '#FFCC80',
+      placeholder: '#FFCC80',
+      info: '#8D6E63',
+      modalBg: '#FFFFFF',
+    }
+  },
+  purpleHaze: {
+    id: 'purpleHaze',
+    colors: {
+      primary: '#9C27B0',
+      primaryLight: '#E1BEE7',
+      success: '#9C27B0',
+      danger: '#E91E63',
+      background: '#F3E5F5',
+      cardBg: '#FFFFFF',
+      surface: '#E1BEE7',
+      text: '#4A148C',
+      textSecondary: '#7B1FA2',
+      textTertiary: '#9C27B0',
+      border: '#CE93D8',
+      placeholder: '#CE93D8',
+      info: '#7B1FA2',
+      modalBg: '#FFFFFF',
+    }
+  },
+  oceanTeal: {
+    id: 'oceanTeal',
+    colors: {
+      primary: '#00897B',
+      primaryLight: '#B2DFDB',
+      success: '#00897B',
+      danger: '#D81B60',
+      background: '#E0F2F1',
+      cardBg: '#FFFFFF',
+      surface: '#B2DFDB',
+      text: '#004D40',
+      textSecondary: '#00695C',
+      textTertiary: '#00897B',
+      border: '#80CBC4',
+      placeholder: '#80CBC4',
+      info: '#00695C',
+      modalBg: '#FFFFFF',
+    }
+  },
+  cherryBlossom: {
+    id: 'cherryBlossom',
+    colors: {
+      primary: '#E91E63',
+      primaryLight: '#F8BBD0',
+      success: '#E91E63',
+      danger: '#C2185B',
+      background: '#FCE4EC',
+      cardBg: '#FFFFFF',
+      surface: '#F8BBD0',
+      text: '#880E4F',
+      textSecondary: '#AD1457',
+      textTertiary: '#C2185B',
+      border: '#F48FB1',
+      placeholder: '#F48FB1',
+      info: '#AD1457',
+      modalBg: '#FFFFFF',
+    }
+  },
+};
 
 export default function PrivacySettingsScreen() {
   const router = useRouter();
+  const [currentTheme, setCurrentTheme] = useState('light');
+  
+  // Get current theme colors
+  const theme = THEMES[currentTheme as keyof typeof THEMES];
+  const colors = theme.colors;
   
   // Privacy states
   const [lastSeen, setLastSeen] = useState('Everyone');
@@ -24,6 +186,22 @@ export default function PrivacySettingsScreen() {
   const [showPickerModal, setShowPickerModal] = useState(false);
   const [pickerType, setPickerType] = useState('');
   const [pickerValue, setPickerValue] = useState('');
+
+  // Load theme from storage
+  const loadTheme = async () => {
+    try {
+      const savedTheme = await AsyncStorage.getItem('app_theme');
+      if (savedTheme && THEMES[savedTheme as keyof typeof THEMES]) {
+        setCurrentTheme(savedTheme);
+      }
+    } catch (error) {
+      console.error('Error loading theme:', error);
+    }
+  };
+
+  useEffect(() => {
+    loadTheme();
+  }, []);
 
   const privacyOptions = ['Everyone', 'My Contacts', 'My Contacts Except...', 'Nobody'];
 
@@ -61,39 +239,35 @@ export default function PrivacySettingsScreen() {
     Alert.alert('Blocked Contacts', 'Manage blocked contacts');
   };
 
-  const handleFingerprintLock = () => {
-    Alert.alert('Fingerprint Lock', 'Enable fingerprint lock for extra security');
-  };
-
   const PrivacyItem = ({ icon, title, value, onPress, rightElement }: any) => (
-    <TouchableOpacity style={styles.privacyItem} onPress={onPress} activeOpacity={0.7}>
+    <TouchableOpacity style={[styles.privacyItem, { backgroundColor: colors.cardBg, borderBottomColor: colors.border }]} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.privacyItemLeft}>
         <View style={styles.privacyIcon}>
-          <Ionicons name={icon} size={22} color="#075E54" />
+          <Ionicons name={icon} size={22} color={colors.primary} />
         </View>
-        <Text style={styles.privacyTitle}>{title}</Text>
+        <Text style={[styles.privacyTitle, { color: colors.text }]}>{title}</Text>
       </View>
-      {rightElement ? rightElement : <Text style={styles.privacyValue}>{value}<Ionicons name="chevron-forward" size={16} color="#999" style={styles.chevron} /></Text>}
+      {rightElement ? rightElement : <Text style={[styles.privacyValue, { color: colors.textSecondary }]}>{value}<Ionicons name="chevron-forward" size={16} color={colors.textTertiary} style={styles.chevron} /></Text>}
     </TouchableOpacity>
   );
 
   const Section = ({ title, children }: any) => (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      <View style={styles.sectionContent}>{children}</View>
+      <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>{title}</Text>
+      <View style={[styles.sectionContent, { backgroundColor: colors.cardBg }]}>{children}</View>
     </View>
   );
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={currentTheme === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={colors.cardBg} />
       
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: colors.cardBg, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#075E54" />
+          <Ionicons name="arrow-back" size={24} color={colors.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Privacy</Text>
+        <Text style={[styles.headerTitle, { color: colors.primary }]}>Privacy</Text>
         <View style={styles.headerRight} />
       </View>
 
@@ -137,13 +311,13 @@ export default function PrivacySettingsScreen() {
               <Switch
                 value={readReceipts}
                 onValueChange={setReadReceipts}
-                trackColor={{ false: '#767577', true: '#25D366' }}
+                trackColor={{ false: colors.textTertiary, true: colors.success }}
                 thumbColor="#fff"
               />
             }
           />
-          <View style={styles.infoTextContainer}>
-            <Text style={styles.infoText}>
+          <View style={[styles.infoTextContainer, { backgroundColor: colors.cardBg }]}>
+            <Text style={[styles.infoText, { color: colors.textSecondary }]}>
               If turned off, you won't be able to see read receipts from others. Read receipts are always sent for group chats.
             </Text>
           </View>
@@ -185,7 +359,7 @@ export default function PrivacySettingsScreen() {
               <Switch
                 value={fingerprintLock}
                 onValueChange={setFingerprintLock}
-                trackColor={{ false: '#767577', true: '#25D366' }}
+                trackColor={{ false: colors.textTertiary, true: colors.success }}
                 thumbColor="#fff"
               />
             }
@@ -198,7 +372,7 @@ export default function PrivacySettingsScreen() {
               <Switch
                 value={screenLock}
                 onValueChange={setScreenLock}
-                trackColor={{ false: '#767577', true: '#25D366' }}
+                trackColor={{ false: colors.textTertiary, true: colors.success }}
                 thumbColor="#fff"
               />
             }
@@ -221,7 +395,7 @@ export default function PrivacySettingsScreen() {
               <Switch
                 value={disappearingMessages}
                 onValueChange={setDisappearingMessages}
-                trackColor={{ false: '#767577', true: '#25D366' }}
+                trackColor={{ false: colors.textTertiary, true: colors.success }}
                 thumbColor="#fff"
               />
             }
@@ -234,7 +408,7 @@ export default function PrivacySettingsScreen() {
               <Switch
                 value={liveLocation}
                 onValueChange={setLiveLocation}
-                trackColor={{ false: '#767577', true: '#25D366' }}
+                trackColor={{ false: colors.textTertiary, true: colors.success }}
                 thumbColor="#fff"
               />
             }
@@ -247,7 +421,7 @@ export default function PrivacySettingsScreen() {
               <Switch
                 value={false}
                 onValueChange={() => {}}
-                trackColor={{ false: '#767577', true: '#25D366' }}
+                trackColor={{ false: colors.textTertiary, true: colors.success }}
                 thumbColor="#fff"
               />
             }
@@ -256,7 +430,7 @@ export default function PrivacySettingsScreen() {
 
         {/* Info text at bottom */}
         <View style={styles.bottomInfo}>
-          <Text style={styles.bottomInfoText}>
+          <Text style={[styles.bottomInfoText, { color: colors.textTertiary }]}>
             Your privacy and security are important to us. These settings control who can see your information and how you interact with others.
           </Text>
         </View>
@@ -265,24 +439,24 @@ export default function PrivacySettingsScreen() {
       {/* Picker Modal */}
       {showPickerModal && (
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Choose who can see</Text>
+          <View style={[styles.modalContainer, { backgroundColor: colors.modalBg }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.modalTitle, { color: colors.primary }]}>Choose who can see</Text>
               <TouchableOpacity onPress={() => setShowPickerModal(false)}>
-                <Ionicons name="close" size={24} color="#075E54" />
+                <Ionicons name="close" size={24} color={colors.primary} />
               </TouchableOpacity>
             </View>
             <View style={styles.modalOptions}>
               {privacyOptions.map(option => (
                 <TouchableOpacity 
                   key={option} 
-                  style={styles.modalOption}
+                  style={[styles.modalOption, { borderBottomColor: colors.border }]}
                   onPress={() => handlePickerSelect(option)}
                 >
-                  <Text style={[styles.modalOptionText, pickerValue === option && styles.modalOptionTextSelected]}>
+                  <Text style={[styles.modalOptionText, { color: colors.text }, pickerValue === option && [styles.modalOptionTextSelected, { color: colors.primary }]]}>
                     {option}
                   </Text>
-                  {pickerValue === option && <Ionicons name="checkmark" size={20} color="#25D366" />}
+                  {pickerValue === option && <Ionicons name="checkmark" size={20} color={colors.success} />}
                 </TouchableOpacity>
               ))}
             </View>
@@ -296,10 +470,8 @@ export default function PrivacySettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F0F2F5',
   },
   header: {
-    backgroundColor: '#fff',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -307,7 +479,6 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'ios' ? 50 : 66,
     paddingBottom: 12,
     borderBottomWidth: 0.5,
-    borderBottomColor: '#e0e0e0',
   },
   backButton: {
     padding: 4,
@@ -315,7 +486,6 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#075E54',
   },
   headerRight: {
     width: 32,
@@ -330,17 +500,13 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#666',
     marginLeft: 16,
     marginBottom: 8,
     textTransform: 'uppercase',
   },
   sectionContent: {
-    backgroundColor: '#fff',
     borderTopWidth: 0.5,
     borderBottomWidth: 0.5,
-    borderTopColor: '#e0e0e0',
-    borderBottomColor: '#e0e0e0',
   },
   privacyItem: {
     flexDirection: 'row',
@@ -348,9 +514,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 12,
     paddingHorizontal: 16,
-    backgroundColor: '#fff',
     borderBottomWidth: 0.5,
-    borderBottomColor: '#e0e0e0',
   },
   privacyItemLeft: {
     flexDirection: 'row',
@@ -367,24 +531,20 @@ const styles = StyleSheet.create({
   },
   privacyTitle: {
     fontSize: 16,
-    color: '#000',
   },
   privacyValue: {
     fontSize: 14,
-    color: '#666',
     marginRight: 8,
   },
   chevron: {
     marginLeft: 4,
   },
   infoTextContainer: {
-    backgroundColor: '#fff',
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
   infoText: {
     fontSize: 12,
-    color: '#666',
     lineHeight: 16,
   },
   bottomInfo: {
@@ -393,7 +553,6 @@ const styles = StyleSheet.create({
   },
   bottomInfoText: {
     fontSize: 12,
-    color: '#999',
     textAlign: 'center',
     lineHeight: 18,
   },
@@ -407,7 +566,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContainer: {
-    backgroundColor: '#fff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '80%',
@@ -418,12 +576,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     borderBottomWidth: 0.5,
-    borderBottomColor: '#e0e0e0',
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#075E54',
   },
   modalOptions: {
     padding: 16,
@@ -435,14 +591,11 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 8,
     borderBottomWidth: 0.5,
-    borderBottomColor: '#e0e0e0',
   },
   modalOptionText: {
     fontSize: 16,
-    color: '#000',
   },
   modalOptionTextSelected: {
-    color: '#075E54',
     fontWeight: '500',
   },
 });

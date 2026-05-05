@@ -1,7 +1,7 @@
 // lib/api/_config.ts
 export const API_CONFIG = {
-  BASE_URL: 'http://192.168.137.1:8000/api/',
-  TIMEOUT: 30000,
+  BASE_URL: 'https://aptecProject.pythonanywhere.com/api/',
+  TIMEOUT: 30000000,
   
   ENDPOINTS: {
     // Registration endpoints

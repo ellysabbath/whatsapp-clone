@@ -154,8 +154,6 @@ export default function ThemeSettingsScreen() {
       setSelectedTheme(themeId);
       setPreviewTheme(themeId);
       
-      // Apply theme globally (you'll need to implement this in your app root)
-      // For now, just show success message
       Alert.alert('Theme Applied', `${THEMES[themeId as keyof typeof THEMES].name} theme has been applied successfully`);
     } catch (error) {
       console.error('Error saving theme:', error);
@@ -186,30 +184,17 @@ export default function ThemeSettingsScreen() {
   const currentTheme = THEMES[previewTheme as keyof typeof THEMES];
   const currentColors = currentTheme.colors;
 
-  // Dynamic styles based on selected theme
-  const dynamicStyles = {
-    container: { backgroundColor: currentColors.background },
-    header: { backgroundColor: '#FFFFFF' }, // Changed to white
-    headerTitle: { color: currentColors.text }, // Changed to use theme text color
-    sectionTitle: { color: currentColors.text },
-    themeCard: { backgroundColor: currentColors.surface, borderColor: currentColors.border },
-    themeName: { color: currentColors.text },
-    previewChatContainer: { backgroundColor: currentColors.surface, borderColor: currentColors.border },
-    previewChatName: { color: currentColors.text },
-    previewChatMessage: { color: currentColors.textSecondary },
-    previewMessageBubbleIncoming: { backgroundColor: currentColors.messageBubble },
-    previewMessageBubbleOutgoing: { backgroundColor: currentColors.messageBubbleOutgoing },
-    previewMessageText: { color: currentColors.text },
-  };
-
   const renderThemeCard = (theme: any) => {
     const isSelected = selectedTheme === theme.id;
-    const isPreview = previewTheme === theme.id;
     
     return (
       <TouchableOpacity
         key={theme.id}
-        style={[styles.themeCard, dynamicStyles.themeCard, isSelected && styles.themeCardSelected]}
+        style={[
+          styles.themeCard, 
+          { backgroundColor: currentColors.surface, borderColor: currentColors.border },
+          isSelected && { borderColor: '#25D366', borderWidth: 2 }
+        ]}
         onPress={() => handleThemeSelect(theme.id)}
         activeOpacity={0.7}
       >
@@ -218,7 +203,7 @@ export default function ThemeSettingsScreen() {
             <Ionicons name={theme.icon as any} size={28} color={theme.colors.primary} />
           </View>
           <View style={styles.themeCardInfo}>
-            <Text style={[styles.themeName, dynamicStyles.themeName]}>{theme.name}</Text>
+            <Text style={[styles.themeName, { color: currentColors.text }]}>{theme.name}</Text>
             <View style={styles.colorPreview}>
               <View style={[styles.colorDot, { backgroundColor: theme.colors.primary }]} />
               <View style={[styles.colorDot, { backgroundColor: theme.colors.background }]} />
@@ -234,15 +219,15 @@ export default function ThemeSettingsScreen() {
   };
 
   return (
-    <View style={[styles.container, dynamicStyles.container]}>
-      <StatusBar barStyle={previewTheme === 'dark' ? 'light-content' : 'dark-content'} backgroundColor="#FFFFFF" />
+    <View style={[styles.container, { backgroundColor: currentColors.background }]}>
+      <StatusBar barStyle={previewTheme === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={currentColors.background} />
       
-      {/* Header - Now with white background */}
-      <View style={[styles.header, dynamicStyles.header]}>
+      {/* Header */}
+      <View style={[styles.header, { backgroundColor: currentColors.surface, borderBottomColor: currentColors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={currentColors.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, dynamicStyles.headerTitle]}>Theme</Text>
+        <Text style={[styles.headerTitle, { color: currentColors.text }]}>Theme</Text>
         <TouchableOpacity onPress={handleReset} style={styles.resetButton}>
           <Ionicons name="refresh-outline" size={22} color={currentColors.text} />
         </TouchableOpacity>
@@ -251,15 +236,15 @@ export default function ThemeSettingsScreen() {
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Live Preview Section */}
         <View style={styles.previewSection}>
-          <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>Live Preview</Text>
-          <View style={[styles.previewChatContainer, dynamicStyles.previewChatContainer]}>
+          <Text style={[styles.sectionTitle, { color: currentColors.textSecondary }]}>Live Preview</Text>
+          <View style={[styles.previewChatContainer, { backgroundColor: currentColors.surface, borderColor: currentColors.border }]}>
             {/* Chat Header Preview */}
-            <View style={styles.previewChatHeader}>
+            <View style={[styles.previewChatHeader, { borderBottomColor: currentColors.border }]}>
               <Ionicons name="arrow-back" size={20} color={currentColors.primary} />
               <View style={styles.previewChatInfo}>
                 <View style={[styles.previewAvatar, { backgroundColor: currentColors.primary }]} />
                 <View>
-                  <Text style={[styles.previewChatName, dynamicStyles.previewChatName]}>Sarah Johnson</Text>
+                  <Text style={[styles.previewChatName, { color: currentColors.text }]}>Sarah Johnson</Text>
                   <Text style={[styles.previewChatStatus, { color: currentColors.textSecondary }]}>Online</Text>
                 </View>
               </View>
@@ -268,15 +253,15 @@ export default function ThemeSettingsScreen() {
 
             {/* Chat Messages Preview */}
             <View style={styles.previewMessages}>
-              <View style={[styles.previewMessageBubble, styles.previewMessageIncoming, dynamicStyles.previewMessageBubbleIncoming]}>
-                <Text style={[styles.previewMessageText, dynamicStyles.previewMessageText]}>
+              <View style={[styles.previewMessageBubble, styles.previewMessageIncoming, { backgroundColor: currentColors.messageBubble }]}>
+                <Text style={[styles.previewMessageText, { color: currentColors.text }]}>
                   Hey! How are you?
                 </Text>
                 <Text style={[styles.previewMessageTime, { color: currentColors.textSecondary }]}>10:30 AM</Text>
               </View>
               
-              <View style={[styles.previewMessageBubble, styles.previewMessageOutgoing, dynamicStyles.previewMessageBubbleOutgoing]}>
-                <Text style={[styles.previewMessageText, dynamicStyles.previewMessageText]}>
+              <View style={[styles.previewMessageBubble, styles.previewMessageOutgoing, { backgroundColor: currentColors.messageBubbleOutgoing }]}>
+                <Text style={[styles.previewMessageText, { color: currentColors.text }]}>
                   I'm good, thanks! How about you?
                 </Text>
                 <View style={styles.previewMessageFooter}>
@@ -285,8 +270,8 @@ export default function ThemeSettingsScreen() {
                 </View>
               </View>
 
-              <View style={[styles.previewMessageBubble, styles.previewMessageIncoming, dynamicStyles.previewMessageBubbleIncoming]}>
-                <Text style={[styles.previewMessageText, dynamicStyles.previewMessageText]}>
+              <View style={[styles.previewMessageBubble, styles.previewMessageIncoming, { backgroundColor: currentColors.messageBubble }]}>
+                <Text style={[styles.previewMessageText, { color: currentColors.text }]}>
                   Doing great! Want to grab coffee later? ☕
                 </Text>
                 <Text style={[styles.previewMessageTime, { color: currentColors.textSecondary }]}>10:32 AM</Text>
@@ -306,7 +291,7 @@ export default function ThemeSettingsScreen() {
 
         {/* Theme Options */}
         <View style={styles.themesSection}>
-          <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>Choose Theme</Text>
+          <Text style={[styles.sectionTitle, { color: currentColors.textSecondary }]}>Choose Theme</Text>
           {Object.values(THEMES).map(renderThemeCard)}
         </View>
 
@@ -334,7 +319,6 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'ios' ? 50 : 66,
     paddingBottom: 16,
     borderBottomWidth: 0.5,
-    borderBottomColor: '#E0E0E0', // Added subtle border like WhatsApp
   },
   backButton: {
     padding: 4,
@@ -370,7 +354,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 12,
     borderBottomWidth: 0.5,
-    borderBottomColor: '#E0E0E0',
   },
   previewChatInfo: {
     flexDirection: 'row',
@@ -444,10 +427,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     padding: 12,
     borderWidth: 1,
-  },
-  themeCardSelected: {
-    borderWidth: 2,
-    borderColor: '#25D366',
   },
   themeCardHeader: {
     flexDirection: 'row',

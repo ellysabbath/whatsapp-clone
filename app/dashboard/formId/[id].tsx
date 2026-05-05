@@ -4,11 +4,197 @@ import { Ionicons } from '@expo/vector-icons';
 import { useState, useEffect, useCallback } from 'react';
 import { formService, Form, FormResponse, Question, SubmitResponseData, GradeResponseData } from '../../../lib/api/services/form.service';
 import { useUser } from '../../../context/UserContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Theme definitions
+const THEMES = {
+  light: {
+    id: 'light',
+    colors: {
+      primary: '#075E54',
+      success: '#25D366',
+      danger: '#FF3B30',
+      warning: '#FF9800',
+      info: '#2196F3',
+      background: '#F5F5F5',
+      cardBg: '#FFFFFF',
+      surface: '#F8F9FA',
+      modalBg: '#FFFFFF',
+      text: '#000000',
+      textSecondary: '#666666',
+      textTertiary: '#999999',
+      border: '#E0E0E0',
+      placeholder: '#CCCCCC',
+      goodScore: '#4CAF50',
+      averageScore: '#FF9800',
+      badScore: '#F44336',
+    }
+  },
+  dark: {
+    id: 'dark',
+    colors: {
+      primary: '#128C7E',
+      success: '#25D366',
+      danger: '#FF5C5C',
+      warning: '#FFB74D',
+      info: '#64B5F6',
+      background: '#111B21',
+      cardBg: '#202C33',
+      surface: '#202C33',
+      modalBg: '#202C33',
+      text: '#E9EDEF',
+      textSecondary: '#AEBAC1',
+      textTertiary: '#8696A0',
+      border: '#2A3942',
+      placeholder: '#3D4B55',
+      goodScore: '#81C784',
+      averageScore: '#FFB74D',
+      badScore: '#E57373',
+    }
+  },
+  whatsappGreen: {
+    id: 'whatsappGreen',
+    colors: {
+      primary: '#25D366',
+      success: '#25D366',
+      danger: '#FF3B30',
+      warning: '#FF9800',
+      info: '#2196F3',
+      background: '#F0F2F5',
+      cardBg: '#FFFFFF',
+      surface: '#FFFFFF',
+      modalBg: '#FFFFFF',
+      text: '#111B21',
+      textSecondary: '#54656F',
+      textTertiary: '#8696A0',
+      border: '#E9EDEF',
+      placeholder: '#CCCCCC',
+      goodScore: '#4CAF50',
+      averageScore: '#FF9800',
+      badScore: '#F44336',
+    }
+  },
+  midnightBlue: {
+    id: 'midnightBlue',
+    colors: {
+      primary: '#1E88E5',
+      success: '#1E88E5',
+      danger: '#FF6B6B',
+      warning: '#FFB74D',
+      info: '#64B5F6',
+      background: '#0A1929',
+      cardBg: '#132F4C',
+      surface: '#132F4C',
+      modalBg: '#132F4C',
+      text: '#FFFFFF',
+      textSecondary: '#B0C4DE',
+      textTertiary: '#7B9BB5',
+      border: '#1E3A5F',
+      placeholder: '#2C4A6E',
+      goodScore: '#81C784',
+      averageScore: '#FFB74D',
+      badScore: '#E57373',
+    }
+  },
+  sunsetOrange: {
+    id: 'sunsetOrange',
+    colors: {
+      primary: '#FF5722',
+      success: '#FF5722',
+      danger: '#D84315',
+      warning: '#FF9800',
+      info: '#2196F3',
+      background: '#FFF3E0',
+      cardBg: '#FFFFFF',
+      surface: '#FFE0B2',
+      modalBg: '#FFFFFF',
+      text: '#4E342E',
+      textSecondary: '#8D6E63',
+      textTertiary: '#A1887F',
+      border: '#FFCC80',
+      placeholder: '#FFCC80',
+      goodScore: '#4CAF50',
+      averageScore: '#FF9800',
+      badScore: '#F44336',
+    }
+  },
+  purpleHaze: {
+    id: 'purpleHaze',
+    colors: {
+      primary: '#9C27B0',
+      success: '#9C27B0',
+      danger: '#E91E63',
+      warning: '#FF9800',
+      info: '#2196F3',
+      background: '#F3E5F5',
+      cardBg: '#FFFFFF',
+      surface: '#E1BEE7',
+      modalBg: '#FFFFFF',
+      text: '#4A148C',
+      textSecondary: '#7B1FA2',
+      textTertiary: '#9C27B0',
+      border: '#CE93D8',
+      placeholder: '#CE93D8',
+      goodScore: '#4CAF50',
+      averageScore: '#FF9800',
+      badScore: '#F44336',
+    }
+  },
+  oceanTeal: {
+    id: 'oceanTeal',
+    colors: {
+      primary: '#00897B',
+      success: '#00897B',
+      danger: '#D81B60',
+      warning: '#FF9800',
+      info: '#2196F3',
+      background: '#E0F2F1',
+      cardBg: '#FFFFFF',
+      surface: '#B2DFDB',
+      modalBg: '#FFFFFF',
+      text: '#004D40',
+      textSecondary: '#00695C',
+      textTertiary: '#00897B',
+      border: '#80CBC4',
+      placeholder: '#80CBC4',
+      goodScore: '#4CAF50',
+      averageScore: '#FF9800',
+      badScore: '#F44336',
+    }
+  },
+  cherryBlossom: {
+    id: 'cherryBlossom',
+    colors: {
+      primary: '#E91E63',
+      success: '#E91E63',
+      danger: '#C2185B',
+      warning: '#FF9800',
+      info: '#2196F3',
+      background: '#FCE4EC',
+      cardBg: '#FFFFFF',
+      surface: '#F8BBD0',
+      modalBg: '#FFFFFF',
+      text: '#880E4F',
+      textSecondary: '#AD1457',
+      textTertiary: '#C2185B',
+      border: '#F48FB1',
+      placeholder: '#F48FB1',
+      goodScore: '#4CAF50',
+      averageScore: '#FF9800',
+      badScore: '#F44336',
+    }
+  },
+};
 
 export default function FormResponseScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const { user, isLoading: userLoading } = useUser();
+  const [currentTheme, setCurrentTheme] = useState('light');
+  
+  // Get current theme colors
+  const theme = THEMES[currentTheme as keyof typeof THEMES];
+  const colors = theme.colors;
   
   // State variables
   const [form, setForm] = useState<Form | null>(null);
@@ -32,8 +218,21 @@ export default function FormResponseScreen() {
   const [showRetakeConfirmation, setShowRetakeConfirmation] = useState(false);
   const [userEmail, setUserEmail] = useState('');
 
+  // Load theme from storage
+  const loadTheme = async () => {
+    try {
+      const savedTheme = await AsyncStorage.getItem('app_theme');
+      if (savedTheme && THEMES[savedTheme as keyof typeof THEMES]) {
+        setCurrentTheme(savedTheme);
+      }
+    } catch (error) {
+      console.error('Error loading theme:', error);
+    }
+  };
+
   // Load user email from context
   useEffect(() => {
+    loadTheme();
     if (user) {
       setUserEmail(user.email || '');
     }
@@ -292,20 +491,20 @@ export default function FormResponseScreen() {
     switch(question.question_type) {
       case 'short_answer':
         return (
-          <View style={styles.questionCard} key={question.question_id}>
+          <View key={question.question_id} style={[styles.questionCard, { backgroundColor: colors.cardBg, shadowColor: colors.border }]}>
             <View style={styles.questionHeader}>
-              <View style={styles.questionNumber}>
+              <View style={[styles.questionNumber, { backgroundColor: colors.success }]}>
                 <Text style={styles.questionNumberText}>{index + 1}</Text>
               </View>
-              <Text style={styles.questionText}>{question.text}</Text>
-              <View style={styles.pointsBadge}>
-                <Text style={styles.pointsBadgeText}>{question.points} pts</Text>
+              <Text style={[styles.questionText, { color: colors.text }]}>{question.text}</Text>
+              <View style={[styles.pointsBadge, { backgroundColor: colors.surface }]}>
+                <Text style={[styles.pointsBadgeText, { color: colors.textSecondary }]}>{question.points} pts</Text>
               </View>
             </View>
             <TextInput
-              style={styles.answerInput}
+              style={[styles.answerInput, { borderColor: colors.border, backgroundColor: colors.surface, color: colors.text }]}
               placeholder="Type your answer here..."
-              placeholderTextColor="#999"
+              placeholderTextColor={colors.placeholder}
               value={currentAnswer || ''}
               onChangeText={(text) => handleAnswer(question.question_id!, text)}
               multiline
@@ -315,14 +514,14 @@ export default function FormResponseScreen() {
         
       case 'checkbox':
         return (
-          <View style={styles.questionCard} key={question.question_id}>
+          <View key={question.question_id} style={[styles.questionCard, { backgroundColor: colors.cardBg, shadowColor: colors.border }]}>
             <View style={styles.questionHeader}>
-              <View style={styles.questionNumber}>
+              <View style={[styles.questionNumber, { backgroundColor: colors.success }]}>
                 <Text style={styles.questionNumberText}>{index + 1}</Text>
               </View>
-              <Text style={styles.questionText}>{question.text}</Text>
-              <View style={styles.pointsBadge}>
-                <Text style={styles.pointsBadgeText}>{question.points} pts</Text>
+              <Text style={[styles.questionText, { color: colors.text }]}>{question.text}</Text>
+              <View style={[styles.pointsBadge, { backgroundColor: colors.surface }]}>
+                <Text style={[styles.pointsBadgeText, { color: colors.textSecondary }]}>{question.points} pts</Text>
               </View>
             </View>
             {question.options?.map((option, idx) => (
@@ -334,9 +533,9 @@ export default function FormResponseScreen() {
                 <Ionicons 
                   name={currentAnswer?.includes(option) ? "checkbox" : "square-outline"} 
                   size={22} 
-                  color="#25D366" 
+                  color={colors.success} 
                 />
-                <Text style={styles.optionText}>{option}</Text>
+                <Text style={[styles.optionText, { color: colors.text }]}>{option}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -344,14 +543,14 @@ export default function FormResponseScreen() {
         
       case 'radio':
         return (
-          <View style={styles.questionCard} key={question.question_id}>
+          <View key={question.question_id} style={[styles.questionCard, { backgroundColor: colors.cardBg, shadowColor: colors.border }]}>
             <View style={styles.questionHeader}>
-              <View style={styles.questionNumber}>
+              <View style={[styles.questionNumber, { backgroundColor: colors.success }]}>
                 <Text style={styles.questionNumberText}>{index + 1}</Text>
               </View>
-              <Text style={styles.questionText}>{question.text}</Text>
-              <View style={styles.pointsBadge}>
-                <Text style={styles.pointsBadgeText}>{question.points} pts</Text>
+              <Text style={[styles.questionText, { color: colors.text }]}>{question.text}</Text>
+              <View style={[styles.pointsBadge, { backgroundColor: colors.surface }]}>
+                <Text style={[styles.pointsBadgeText, { color: colors.textSecondary }]}>{question.points} pts</Text>
               </View>
             </View>
             {question.options?.map((option, idx) => (
@@ -363,9 +562,9 @@ export default function FormResponseScreen() {
                 <Ionicons 
                   name={currentAnswer === option ? "radio-button-on" : "radio-button-off"} 
                   size={22} 
-                  color="#25D366" 
+                  color={colors.success} 
                 />
-                <Text style={styles.optionText}>{option}</Text>
+                <Text style={[styles.optionText, { color: colors.text }]}>{option}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -373,30 +572,30 @@ export default function FormResponseScreen() {
         
       case 'accept':
         return (
-          <View style={styles.questionCard} key={question.question_id}>
+          <View key={question.question_id} style={[styles.questionCard, { backgroundColor: colors.cardBg, shadowColor: colors.border }]}>
             <View style={styles.questionHeader}>
-              <View style={styles.questionNumber}>
+              <View style={[styles.questionNumber, { backgroundColor: colors.success }]}>
                 <Text style={styles.questionNumberText}>{index + 1}</Text>
               </View>
-              <Text style={styles.questionText}>{question.text}</Text>
-              <View style={styles.pointsBadge}>
-                <Text style={styles.pointsBadgeText}>{question.points} pts</Text>
+              <Text style={[styles.questionText, { color: colors.text }]}>{question.text}</Text>
+              <View style={[styles.pointsBadge, { backgroundColor: colors.surface }]}>
+                <Text style={[styles.pointsBadgeText, { color: colors.textSecondary }]}>{question.points} pts</Text>
               </View>
             </View>
             <View style={styles.twoButtonRow}>
               <TouchableOpacity
-                style={[styles.acceptButton, currentAnswer === 'accept' && styles.activeButton]}
+                style={[styles.acceptButton, { borderColor: colors.border, backgroundColor: colors.cardBg }, currentAnswer === 'accept' && [styles.activeButton, { borderColor: colors.success, backgroundColor: colors.success + '20' }]]}
                 onPress={() => handleAnswer(question.question_id!, 'accept')}
               >
-                <Ionicons name="checkmark-circle" size={24} color={currentAnswer === 'accept' ? "#25D366" : "#999"} />
-                <Text style={styles.buttonText}>I Accept</Text>
+                <Ionicons name="checkmark-circle" size={24} color={currentAnswer === 'accept' ? colors.success : colors.textTertiary} />
+                <Text style={[styles.buttonText, { color: colors.text }]}>I Accept</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.declineButton, currentAnswer === 'decline' && styles.activeButton]}
+                style={[styles.declineButton, { borderColor: colors.border, backgroundColor: colors.cardBg }, currentAnswer === 'decline' && [styles.activeButton, { borderColor: colors.danger, backgroundColor: colors.danger + '20' }]]}
                 onPress={() => handleAnswer(question.question_id!, 'decline')}
               >
-                <Ionicons name="close-circle" size={24} color={currentAnswer === 'decline' ? "#FF3B30" : "#999"} />
-                <Text style={styles.buttonText}>I Decline</Text>
+                <Ionicons name="close-circle" size={24} color={currentAnswer === 'decline' ? colors.danger : colors.textTertiary} />
+                <Text style={[styles.buttonText, { color: colors.text }]}>I Decline</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -404,18 +603,18 @@ export default function FormResponseScreen() {
         
       case 'understand':
         return (
-          <View style={styles.questionCard} key={question.question_id}>
+          <View key={question.question_id} style={[styles.questionCard, { backgroundColor: colors.cardBg, shadowColor: colors.border }]}>
             <View style={styles.questionHeader}>
-              <View style={styles.questionNumber}>
+              <View style={[styles.questionNumber, { backgroundColor: colors.success }]}>
                 <Text style={styles.questionNumberText}>{index + 1}</Text>
               </View>
-              <Text style={styles.questionText}>{question.text}</Text>
-              <View style={styles.pointsBadge}>
-                <Text style={styles.pointsBadgeText}>{question.points} pts</Text>
+              <Text style={[styles.questionText, { color: colors.text }]}>{question.text}</Text>
+              <View style={[styles.pointsBadge, { backgroundColor: colors.surface }]}>
+                <Text style={[styles.pointsBadgeText, { color: colors.textSecondary }]}>{question.points} pts</Text>
               </View>
             </View>
             <TouchableOpacity
-              style={[styles.understandButton, currentAnswer === 'understand' && styles.activeButton]}
+              style={[styles.understandButton, { backgroundColor: colors.success }]}
               onPress={() => handleAnswer(question.question_id!, 'understand')}
             >
               <Ionicons name="bulb" size={24} color="#fff" />
@@ -426,37 +625,37 @@ export default function FormResponseScreen() {
         
       case 'learn_more':
         return (
-          <View style={styles.questionCard} key={question.question_id}>
+          <View key={question.question_id} style={[styles.questionCard, { backgroundColor: colors.cardBg, shadowColor: colors.border }]}>
             <View style={styles.questionHeader}>
-              <View style={styles.questionNumber}>
+              <View style={[styles.questionNumber, { backgroundColor: colors.success }]}>
                 <Text style={styles.questionNumberText}>{index + 1}</Text>
               </View>
-              <Text style={styles.questionText}>{question.text}</Text>
-              <View style={styles.pointsBadge}>
-                <Text style={styles.pointsBadgeText}>{question.points} pts</Text>
+              <Text style={[styles.questionText, { color: colors.text }]}>{question.text}</Text>
+              <View style={[styles.pointsBadge, { backgroundColor: colors.surface }]}>
+                <Text style={[styles.pointsBadgeText, { color: colors.textSecondary }]}>{question.points} pts</Text>
               </View>
             </View>
             <View style={styles.twoButtonRow}>
               <TouchableOpacity
-                style={[styles.learnButton, currentAnswer === 'learn_more' && styles.activeButton]}
+                style={[styles.learnButton, { borderColor: colors.border, backgroundColor: colors.cardBg }, currentAnswer === 'learn_more' && [styles.activeButton, { borderColor: colors.success, backgroundColor: colors.success + '20' }]]}
                 onPress={() => handleAnswer(question.question_id!, 'learn_more')}
               >
-                <Ionicons name="school" size={24} color={currentAnswer === 'learn_more' ? "#25D366" : "#999"} />
-                <Text style={styles.buttonText}>I Will Learn More</Text>
+                <Ionicons name="school" size={24} color={currentAnswer === 'learn_more' ? colors.success : colors.textTertiary} />
+                <Text style={[styles.buttonText, { color: colors.text }]}>I Will Learn More</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.gotItButton, currentAnswer === 'got_it' && styles.activeButton]}
+                style={[styles.gotItButton, { borderColor: colors.border, backgroundColor: colors.cardBg }, currentAnswer === 'got_it' && [styles.activeButton, { borderColor: colors.success, backgroundColor: colors.success + '20' }]]}
                 onPress={() => handleAnswer(question.question_id!, 'got_it')}
               >
-                <Ionicons name="checkmark-circle" size={24} color={currentAnswer === 'got_it' ? "#25D366" : "#999"} />
-                <Text style={styles.buttonText}>I Got It</Text>
+                <Ionicons name="checkmark-circle" size={24} color={currentAnswer === 'got_it' ? colors.success : colors.textTertiary} />
+                <Text style={[styles.buttonText, { color: colors.text }]}>I Got It</Text>
               </TouchableOpacity>
             </View>
             {currentAnswer === 'learn_more' && (
               <TextInput
-                style={styles.explanationInput}
+                style={[styles.explanationInput, { borderColor: colors.border, backgroundColor: colors.surface, color: colors.text }]}
                 placeholder="What would you like to learn more about?"
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.placeholder}
                 multiline
                 value={explanationText[question.question_id!] || ''}
                 onChangeText={(text) => setExplanationText({...explanationText, [question.question_id!]: text})}
@@ -467,17 +666,17 @@ export default function FormResponseScreen() {
         
       default:
         return (
-          <View style={styles.questionCard} key={question.question_id}>
+          <View key={question.question_id} style={[styles.questionCard, { backgroundColor: colors.cardBg, shadowColor: colors.border }]}>
             <View style={styles.questionHeader}>
-              <View style={styles.questionNumber}>
+              <View style={[styles.questionNumber, { backgroundColor: colors.success }]}>
                 <Text style={styles.questionNumberText}>{index + 1}</Text>
               </View>
-              <Text style={styles.questionText}>{question.text}</Text>
-              <View style={styles.pointsBadge}>
-                <Text style={styles.pointsBadgeText}>{question.points} pts</Text>
+              <Text style={[styles.questionText, { color: colors.text }]}>{question.text}</Text>
+              <View style={[styles.pointsBadge, { backgroundColor: colors.surface }]}>
+                <Text style={[styles.pointsBadgeText, { color: colors.textSecondary }]}>{question.points} pts</Text>
               </View>
             </View>
-            <Text style={styles.unsupportedText}>This question type is not supported</Text>
+            <Text style={[styles.unsupportedText, { color: colors.textTertiary }]}>This question type is not supported</Text>
           </View>
         );
     }
@@ -500,39 +699,39 @@ export default function FormResponseScreen() {
     const currentScore = scores[item.question_id!] || 0;
     
     return (
-      <View key={item.question_id} style={styles.gradingCard}>
+      <View key={item.question_id} style={[styles.gradingCard, { backgroundColor: colors.cardBg, borderLeftColor: colors.warning, shadowColor: colors.border }]}>
         <View style={styles.questionHeader}>
-          <View style={styles.questionNumber}>
+          <View style={[styles.questionNumber, { backgroundColor: colors.success }]}>
             <Text style={styles.questionNumberText}>{index + 1}</Text>
           </View>
-          <Text style={styles.questionText}>{item.text}</Text>
-          <View style={styles.pointsBadge}>
-            <Text style={styles.pointsBadgeText}>{item.points} pts</Text>
+          <Text style={[styles.questionText, { color: colors.text }]}>{item.text}</Text>
+          <View style={[styles.pointsBadge, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.pointsBadgeText, { color: colors.textSecondary }]}>{item.points} pts</Text>
           </View>
         </View>
         
-        <View style={styles.answerContainer}>
-          <Text style={styles.answerLabel}>Reader's Answer:</Text>
-          <Text style={styles.answerText}>{answerDisplay || 'No answer'}</Text>
+        <View style={[styles.answerContainer, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.answerLabel, { color: colors.textSecondary }]}>Reader's Answer:</Text>
+          <Text style={[styles.answerText, { color: colors.text }]}>{answerDisplay || 'No answer'}</Text>
         </View>
         
         <View style={styles.scoreRow}>
-          <Text style={styles.scoreLabel}>Score (max {item.points}):</Text>
+          <Text style={[styles.scoreLabel, { color: colors.text }]}>Score (max {item.points}):</Text>
           <TextInput
-            style={styles.scoreInput}
+            style={[styles.scoreInput, { borderColor: colors.border, backgroundColor: colors.surface, color: colors.text }]}
             keyboardType="number-pad"
             value={currentScore.toString()}
             onChangeText={(text) => handleScore(item.question_id!, text, item.points)}
             placeholder="0"
-            placeholderTextColor="#999"
+            placeholderTextColor={colors.placeholder}
           />
-          <Text style={styles.scoreMax}>/{item.points}</Text>
+          <Text style={[styles.scoreMax, { color: colors.textSecondary }]}>/{item.points}</Text>
         </View>
         
         <TextInput
-          style={styles.feedbackInput}
+          style={[styles.feedbackInput, { borderColor: colors.border, backgroundColor: colors.surface, color: colors.text }]}
           placeholder="Add feedback for this question..."
-          placeholderTextColor="#999"
+          placeholderTextColor={colors.placeholder}
           value={feedbacks[item.question_id!] || ''}
           onChangeText={(text) => setFeedbacks({...feedbacks, [item.question_id!]: text})}
           multiline
@@ -550,28 +749,28 @@ export default function FormResponseScreen() {
       onRequestClose={() => setShowResultsModal(false)}
     >
       <View style={styles.modalOverlay}>
-        <View style={styles.resultsModalContainer}>
-          <View style={styles.resultsModalHeader}>
-            <Text style={styles.resultsModalTitle}>Your Grade Results</Text>
+        <View style={[styles.resultsModalContainer, { backgroundColor: colors.modalBg }]}>
+          <View style={[styles.resultsModalHeader, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.resultsModalTitle, { color: colors.success }]}>Your Grade Results</Text>
             <TouchableOpacity onPress={() => setShowResultsModal(false)}>
-              <Ionicons name="close" size={24} color="#000000" />
+              <Ionicons name="close" size={24} color={colors.text} />
             </TouchableOpacity>
           </View>
           
           <ScrollView style={styles.resultsModalContent}>
             {selectedResponseForResults && form && (
               <>
-                <View style={styles.scoreSummaryCard}>
-                  <Text style={styles.scoreSummaryTitle}>Overall Score</Text>
-                  <Text style={styles.scoreSummaryValue}>
+                <View style={[styles.scoreSummaryCard, { backgroundColor: colors.surface }]}>
+                  <Text style={[styles.scoreSummaryTitle, { color: colors.textSecondary }]}>Overall Score</Text>
+                  <Text style={[styles.scoreSummaryValue, { color: colors.text }]}>
                     {selectedResponseForResults.total_score?.toFixed(0)} / {selectedResponseForResults.max_possible_score}
                   </Text>
-                  <Text style={styles.scoreSummaryPercentage}>
+                  <Text style={[styles.scoreSummaryPercentage, { color: colors.success }]}>
                     {selectedResponseForResults.percentage?.toFixed(1)}%
                   </Text>
                   <View style={[
                     styles.statusBadge,
-                    (selectedResponseForResults.percentage || 0) >= 70 ? styles.passedBadge : styles.failedBadge
+                    (selectedResponseForResults.percentage || 0) >= 70 ? [styles.passedBadge, { backgroundColor: colors.goodScore }] : [styles.failedBadge, { backgroundColor: colors.warning }]
                   ]}>
                     <Text style={styles.statusBadgeText}>
                       {(selectedResponseForResults.percentage || 0) >= 70 ? 'PASSED' : 'NEEDS IMPROVEMENT'}
@@ -579,7 +778,7 @@ export default function FormResponseScreen() {
                   </View>
                 </View>
                 
-                <Text style={styles.detailedTitle}>Detailed Results</Text>
+                <Text style={[styles.detailedTitle, { color: colors.primary }]}>Detailed Results</Text>
                 
                 {form.questions.map((question, idx) => {
                   const answer = selectedResponseForResults.answers.find(a => a.question === question.id);
@@ -588,25 +787,25 @@ export default function FormResponseScreen() {
                   const percentage = maxScore > 0 ? (score / maxScore) * 100 : 0;
                   
                   return (
-                    <View key={question.question_id} style={styles.resultItemCard}>
+                    <View key={question.question_id} style={[styles.resultItemCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                       <View style={styles.resultItemHeader}>
-                        <Text style={styles.resultItemNumber}>Q{idx + 1}</Text>
-                        <Text style={styles.resultItemText}>{question.text}</Text>
+                        <Text style={[styles.resultItemNumber, { color: colors.success }]}>Q{idx + 1}</Text>
+                        <Text style={[styles.resultItemText, { color: colors.text }]}>{question.text}</Text>
                       </View>
-                      <Text style={styles.resultItemAnswer}>
+                      <Text style={[styles.resultItemAnswer, { color: colors.textSecondary }]}>
                         Your answer: {answer?.answer_text || answer?.answer_choices?.join(', ') || 'No answer'}
                       </Text>
                       <View style={styles.resultItemScoreRow}>
-                        <Text style={styles.resultItemScoreLabel}>Score:</Text>
+                        <Text style={[styles.resultItemScoreLabel, { color: colors.textSecondary }]}>Score:</Text>
                         <Text style={[
                           styles.resultItemScore,
-                          percentage >= 70 ? styles.goodScore : percentage >= 50 ? styles.averageScore : styles.badScore
+                          percentage >= 70 ? { color: colors.goodScore } : percentage >= 50 ? { color: colors.averageScore } : { color: colors.badScore }
                         ]}>
                           {score} / {maxScore}
                         </Text>
                       </View>
                       {answer?.feedback && (
-                        <Text style={styles.resultItemFeedback}>Feedback: {answer.feedback}</Text>
+                        <Text style={[styles.resultItemFeedback, { color: colors.info }]}>Feedback: {answer.feedback}</Text>
                       )}
                     </View>
                   );
@@ -615,18 +814,16 @@ export default function FormResponseScreen() {
             )}
           </ScrollView>
           
-          <View style={styles.resultsModalFooter}>
-            <TouchableOpacity 
-              style={styles.retakeButton}
-              onPress={() => {
-                setShowResultsModal(false);
-                handleRetakeForm();
-              }}
-            >
-              <Ionicons name="refresh-circle" size={20} color="#fff" />
-              <Text style={styles.retakeButtonText}>Take Again</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity 
+            style={[styles.retakeButton, { backgroundColor: colors.warning }]}
+            onPress={() => {
+              setShowResultsModal(false);
+              handleRetakeForm();
+            }}
+          >
+            <Ionicons name="refresh-circle" size={20} color="#fff" />
+            <Text style={styles.retakeButtonText}>Take Again</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </Modal>
@@ -640,21 +837,21 @@ export default function FormResponseScreen() {
       onRequestClose={() => setShowRetakeConfirmation(false)}
     >
       <View style={styles.modalOverlay}>
-        <View style={styles.confirmModal}>
-          <Ionicons name="refresh-circle" size={50} color="#FF9800" />
-          <Text style={styles.confirmTitle}>Retake Form?</Text>
-          <Text style={styles.confirmMessage}>
+        <View style={[styles.confirmModal, { backgroundColor: colors.cardBg }]}>
+          <Ionicons name="refresh-circle" size={50} color={colors.warning} />
+          <Text style={[styles.confirmTitle, { color: colors.text }]}>Retake Form?</Text>
+          <Text style={[styles.confirmMessage, { color: colors.textSecondary }]}>
             Taking the form again will reset your previous answers. Your previous grade will be replaced with the new one.
           </Text>
           <View style={styles.confirmButtons}>
             <TouchableOpacity 
-              style={styles.confirmCancel} 
+              style={[styles.confirmCancel, { borderColor: colors.border }]} 
               onPress={() => setShowRetakeConfirmation(false)}
             >
-              <Text style={styles.confirmCancelText}>Cancel</Text>
+              <Text style={[styles.confirmCancelText, { color: colors.textSecondary }]}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity 
-              style={styles.confirmRetake} 
+              style={[styles.confirmRetake, { backgroundColor: colors.warning }]} 
               onPress={confirmRetake}
             >
               <Text style={styles.confirmRetakeText}>Retake</Text>
@@ -668,18 +865,18 @@ export default function FormResponseScreen() {
   // Loading state
   if (loading || userLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#25D366" />
-        <Text style={styles.loadingText}>Loading form...</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.success} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading form...</Text>
       </View>
     );
   }
 
   if (!form) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.errorText}>Form not found</Text>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButtonSmall}>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <Text style={[styles.errorText, { color: colors.danger }]}>Form not found</Text>
+        <TouchableOpacity onPress={() => router.back()} style={[styles.backButtonSmall, { backgroundColor: colors.success }]}>
           <Text style={styles.backButtonText}>Go Back</Text>
         </TouchableOpacity>
       </View>
@@ -690,16 +887,16 @@ export default function FormResponseScreen() {
   const isSubmittedAndGraded = hasSubmitted && userResponse?.is_graded;
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { backgroundColor: colors.cardBg, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#000000" />
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>{form.title}</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>{form.title}</Text>
         {isOwner && !gradingMode && (
           <View style={styles.headerRight}>
             <TouchableOpacity onPress={() => setShowMenu(!showMenu)} style={styles.menuButton}>
-              <Ionicons name="ellipsis-vertical" size={22} color="#000000" />
+              <Ionicons name="ellipsis-vertical" size={22} color={colors.text} />
             </TouchableOpacity>
           </View>
         )}
@@ -712,7 +909,7 @@ export default function FormResponseScreen() {
           activeOpacity={1} 
           onPress={() => setShowMenu(false)}
         >
-          <View style={styles.dropdownMenu}>
+          <View style={[styles.dropdownMenu, { backgroundColor: colors.cardBg, shadowColor: colors.border }]}>
             <TouchableOpacity 
               style={styles.menuItem}
               onPress={() => {
@@ -720,8 +917,8 @@ export default function FormResponseScreen() {
                 router.push('/dashboard');
               }}
             >
-              <Ionicons name="home-outline" size={20} color="#000000" />
-              <Text style={styles.menuItemText}>Dashboard</Text>
+              <Ionicons name="home-outline" size={20} color={colors.text} />
+              <Text style={[styles.menuItemText, { color: colors.text }]}>Dashboard</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -729,18 +926,18 @@ export default function FormResponseScreen() {
 
       {/* Tab Bar for Owner View */}
       {isOwner && !gradingMode && (
-        <View style={styles.tabBar}>
+        <View style={[styles.tabBar, { backgroundColor: colors.cardBg, borderBottomColor: colors.border }]}>
           <TouchableOpacity 
-            style={[styles.tab, activeTab === 'respond' && styles.tabActive]}
+            style={[styles.tab, activeTab === 'respond' && [styles.tabActive, { borderBottomColor: colors.success }]]}
             onPress={() => setActiveTab('respond')}
           >
-            <Text style={[styles.tabText, activeTab === 'respond' && styles.tabTextActive]}>Respond</Text>
+            <Text style={[styles.tabText, { color: colors.textSecondary }, activeTab === 'respond' && [styles.tabTextActive, { color: colors.success }]]}>Respond</Text>
           </TouchableOpacity>
           <TouchableOpacity 
-            style={[styles.tab, activeTab === 'responses' && styles.tabActive]}
+            style={[styles.tab, activeTab === 'responses' && [styles.tabActive, { borderBottomColor: colors.success }]]}
             onPress={() => setActiveTab('responses')}
           >
-            <Text style={[styles.tabText, activeTab === 'responses' && styles.tabTextActive]}>
+            <Text style={[styles.tabText, { color: colors.textSecondary }, activeTab === 'responses' && [styles.tabTextActive, { color: colors.success }]]}>
               Responses ({responses.length})
             </Text>
           </TouchableOpacity>
@@ -750,31 +947,31 @@ export default function FormResponseScreen() {
       <ScrollView 
         style={styles.content}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#25D366"]} tintColor="#25D366" />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.success]} tintColor={colors.success} />
         }
       >
         {/* Form Info Section */}
-        <View style={styles.infoSection}>
-          <View style={styles.infoHeader}>
-            <View style={styles.infoIconContainer}>
-              <Ionicons name="information-circle" size={24} color="#25D366" />
+        <View style={[styles.infoSection, { backgroundColor: colors.cardBg, shadowColor: colors.border }]}>
+          <View style={[styles.infoHeader, { borderBottomColor: colors.border }]}>
+            <View style={[styles.infoIconContainer, { backgroundColor: colors.success + '20' }]}>
+              <Ionicons name="information-circle" size={24} color={colors.success} />
             </View>
-            <Text style={styles.infoTitle}>Form Information</Text>
+            <Text style={[styles.infoTitle, { color: colors.success }]}>Form Information</Text>
           </View>
-          <Text style={styles.formTitle}>{form.title}</Text>
-          <Text style={styles.description}>{form.description || 'No description provided'}</Text>
+          <Text style={[styles.formTitle, { color: colors.text }]}>{form.title}</Text>
+          <Text style={[styles.description, { color: colors.textSecondary }]}>{form.description || 'No description provided'}</Text>
           <View style={styles.infoRow}>
-            <View style={styles.infoBadge}>
-              <Ionicons name="person-outline" size={12} color="#666" />
-              <Text style={styles.infoBadgeText}>By: {form.composer_name}</Text>
+            <View style={[styles.infoBadge, { backgroundColor: colors.surface }]}>
+              <Ionicons name="person-outline" size={12} color={colors.textSecondary} />
+              <Text style={[styles.infoBadgeText, { color: colors.textSecondary }]}>By: {form.composer_name}</Text>
             </View>
-            <View style={styles.infoBadge}>
-              <Ionicons name="help-circle-outline" size={12} color="#666" />
-              <Text style={styles.infoBadgeText}>{form.questions?.length || 0} questions</Text>
+            <View style={[styles.infoBadge, { backgroundColor: colors.surface }]}>
+              <Ionicons name="help-circle-outline" size={12} color={colors.textSecondary} />
+              <Text style={[styles.infoBadgeText, { color: colors.textSecondary }]}>{form.questions?.length || 0} questions</Text>
             </View>
-            <View style={styles.infoBadge}>
-              <Ionicons name="star-outline" size={12} color="#666" />
-              <Text style={styles.infoBadgeText}>{form.total_points} pts</Text>
+            <View style={[styles.infoBadge, { backgroundColor: colors.surface }]}>
+              <Ionicons name="star-outline" size={12} color={colors.textSecondary} />
+              <Text style={[styles.infoBadgeText, { color: colors.textSecondary }]}>{form.total_points} pts</Text>
             </View>
           </View>
         </View>
@@ -789,7 +986,7 @@ export default function FormResponseScreen() {
                   <>
                     {form.questions.map((question, index) => renderQuestionByType(question, index))}
                     <TouchableOpacity 
-                      style={styles.submitButton} 
+                      style={[styles.submitButton, { backgroundColor: colors.success }]} 
                       onPress={submitResponse}
                       disabled={isSubmitting}
                     >
@@ -803,12 +1000,12 @@ export default function FormResponseScreen() {
 
                 {/* Submitted waiting for grading */}
                 {isSubmittedNotGraded && (
-                  <View style={styles.waitingContainer}>
-                    <Ionicons name="time-outline" size={48} color="#FF9800" />
-                    <Text style={styles.waitingTitle}>Waiting for Grading</Text>
-                    <Text style={styles.waitingText}>Your responses have been submitted successfully.</Text>
-                    <Text style={styles.waitingSubtext}>The form creator will grade your responses soon.</Text>
-                    <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
+                  <View style={[styles.waitingContainer, { backgroundColor: colors.warning + '20' }]}>
+                    <Ionicons name="time-outline" size={48} color={colors.warning} />
+                    <Text style={[styles.waitingTitle, { color: colors.warning }]}>Waiting for Grading</Text>
+                    <Text style={[styles.waitingText, { color: colors.textSecondary }]}>Your responses have been submitted successfully.</Text>
+                    <Text style={[styles.waitingSubtext, { color: colors.textTertiary }]}>The form creator will grade your responses soon.</Text>
+                    <TouchableOpacity style={[styles.refreshButton, { backgroundColor: colors.warning }]} onPress={onRefresh}>
                       <Ionicons name="refresh-outline" size={20} color="#fff" />
                       <Text style={styles.refreshButtonText}>Refresh Status</Text>
                     </TouchableOpacity>
@@ -817,23 +1014,23 @@ export default function FormResponseScreen() {
 
                 {/* Submitted and graded */}
                 {isSubmittedAndGraded && userResponse && (
-                  <View style={styles.gradedContainer}>
-                    <Ionicons name="checkmark-done-circle" size={48} color="#4CAF50" />
-                    <Text style={styles.gradedTitle}>Your Response Has Been Graded!</Text>
+                  <View style={[styles.gradedContainer, { backgroundColor: colors.goodScore + '20' }]}>
+                    <Ionicons name="checkmark-done-circle" size={48} color={colors.goodScore} />
+                    <Text style={[styles.gradedTitle, { color: colors.goodScore }]}>Your Response Has Been Graded!</Text>
                     <View style={styles.scorePreview}>
-                      <Text style={styles.scorePreviewText}>
+                      <Text style={[styles.scorePreviewText, { color: colors.text }]}>
                         Score: {userResponse.total_score?.toFixed(0)} / {userResponse.max_possible_score}
                       </Text>
-                      <Text style={styles.scorePreviewPercentage}>
+                      <Text style={[styles.scorePreviewPercentage, { color: colors.goodScore }]}>
                         ({userResponse.percentage?.toFixed(1)}%)
                       </Text>
                     </View>
                     <View style={styles.gradedButtonsRow}>
-                      <TouchableOpacity style={styles.viewGradeButton} onPress={() => viewGrade(userResponse)}>
+                      <TouchableOpacity style={[styles.viewGradeButton, { backgroundColor: colors.primary }]} onPress={() => viewGrade(userResponse)}>
                         <Ionicons name="school-outline" size={20} color="#fff" />
                         <Text style={styles.viewGradeButtonText}>View My Grade</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity style={styles.retakeButton} onPress={handleRetakeForm}>
+                      <TouchableOpacity style={[styles.retakeButton, { backgroundColor: colors.warning }]} onPress={handleRetakeForm}>
                         <Ionicons name="refresh-circle" size={20} color="#fff" />
                         <Text style={styles.retakeButtonText}>Take Again</Text>
                       </TouchableOpacity>
@@ -849,32 +1046,32 @@ export default function FormResponseScreen() {
                 {!hasSubmitted ? (
                   <>
                     {form.questions.map((question, index) => renderQuestionByType(question, index))}
-                    <TouchableOpacity style={styles.submitButton} onPress={submitResponse} disabled={isSubmitting}>
+                    <TouchableOpacity style={[styles.submitButton, { backgroundColor: colors.success }]} onPress={submitResponse} disabled={isSubmitting}>
                       <Ionicons name="send" size={20} color="#fff" />
                       <Text style={styles.submitButtonText}>Submit Test Response</Text>
                     </TouchableOpacity>
                   </>
                 ) : (
-                  <View style={styles.submittedInfoContainer}>
-                    <Ionicons name="checkmark-circle" size={48} color="#4CAF50" />
-                    <Text style={styles.submittedInfoTitle}>Test Response Submitted</Text>
-                    <Text style={styles.submittedInfoText}>You have already submitted a test response.</Text>
+                  <View style={[styles.submittedInfoContainer, { backgroundColor: colors.goodScore + '20' }]}>
+                    <Ionicons name="checkmark-circle" size={48} color={colors.goodScore} />
+                    <Text style={[styles.submittedInfoTitle, { color: colors.goodScore }]}>Test Response Submitted</Text>
+                    <Text style={[styles.submittedInfoText, { color: colors.textSecondary }]}>You have already submitted a test response.</Text>
                     {userResponse?.is_graded && (
                       <>
                         <View style={styles.scorePreview}>
-                          <Text style={styles.scorePreviewText}>
+                          <Text style={[styles.scorePreviewText, { color: colors.text }]}>
                             Score: {userResponse.total_score?.toFixed(0)} / {userResponse.max_possible_score}
                           </Text>
-                          <Text style={styles.scorePreviewPercentage}>
+                          <Text style={[styles.scorePreviewPercentage, { color: colors.goodScore }]}>
                             ({userResponse.percentage?.toFixed(1)}%)
                           </Text>
                         </View>
                         <View style={styles.gradedButtonsRow}>
-                          <TouchableOpacity style={styles.viewGradeButton} onPress={() => viewGrade(userResponse)}>
+                          <TouchableOpacity style={[styles.viewGradeButton, { backgroundColor: colors.primary }]} onPress={() => viewGrade(userResponse)}>
                             <Ionicons name="school-outline" size={20} color="#fff" />
                             <Text style={styles.viewGradeButtonText}>View Results</Text>
                           </TouchableOpacity>
-                          <TouchableOpacity style={styles.retakeButton} onPress={handleRetakeForm}>
+                          <TouchableOpacity style={[styles.retakeButton, { backgroundColor: colors.warning }]} onPress={handleRetakeForm}>
                             <Ionicons name="refresh-circle" size={20} color="#fff" />
                             <Text style={styles.retakeButtonText}>Take Again</Text>
                           </TouchableOpacity>
@@ -882,7 +1079,7 @@ export default function FormResponseScreen() {
                       </>
                     )}
                     {!userResponse?.is_graded && (
-                      <Text style={styles.submittedInfoSubtext}>Waiting for grading...</Text>
+                      <Text style={[styles.submittedInfoSubtext, { color: colors.textTertiary }]}>Waiting for grading...</Text>
                     )}
                   </View>
                 )}
@@ -893,50 +1090,50 @@ export default function FormResponseScreen() {
             {isOwner && activeTab === 'responses' && (
               <View style={styles.responsesSection}>
                 {responses.length === 0 ? (
-                  <View style={styles.infoMessage}>
-                    <Ionicons name="people-outline" size={24} color="#999" />
-                    <Text style={styles.infoMessageText}>No responses yet.</Text>
+                  <View style={[styles.infoMessage, { backgroundColor: colors.warning + '20' }]}>
+                    <Ionicons name="people-outline" size={24} color={colors.warning} />
+                    <Text style={[styles.infoMessageText, { color: colors.warning }]}>No responses yet.</Text>
                   </View>
                 ) : (
                   <>
-                    <Text style={styles.responsesTitle}>All Responses ({responses.length})</Text>
+                    <Text style={[styles.responsesTitle, { color: colors.success }]}>All Responses ({responses.length})</Text>
                     {responses.map((response) => (
-                      <View key={response.response_id} style={styles.responseCard}>
+                      <View key={response.response_id} style={[styles.responseCard, { backgroundColor: colors.cardBg, shadowColor: colors.border }]}>
                         <View style={styles.responseHeader}>
                           <View style={styles.responseAvatar}>
-                            <Ionicons name="person-circle" size={40} color="#25D366" />
+                            <Ionicons name="person-circle" size={40} color={colors.success} />
                           </View>
                           <View style={styles.responseInfo}>
-                            <Text style={styles.responseName}>{response.respondent_name || 'Anonymous'}</Text>
-                            <Text style={styles.responseEmail}>{response.respondent_email}</Text>
-                            <Text style={styles.responseDate}>
+                            <Text style={[styles.responseName, { color: colors.text }]}>{response.respondent_name || 'Anonymous'}</Text>
+                            <Text style={[styles.responseEmail, { color: colors.textSecondary }]}>{response.respondent_email}</Text>
+                            <Text style={[styles.responseDate, { color: colors.textTertiary }]}>
                               {new Date(response.submitted_at).toLocaleString()}
                             </Text>
                           </View>
                           {response.is_graded ? (
-                            <View style={styles.gradedBadge}>
+                            <View style={[styles.gradedBadge, { backgroundColor: colors.goodScore }]}>
                               <Text style={styles.gradedText}>{response.percentage?.toFixed(1)}%</Text>
                             </View>
                           ) : (
-                            <View style={styles.pendingBadge}>
+                            <View style={[styles.pendingBadge, { backgroundColor: colors.warning }]}>
                               <Text style={styles.pendingText}>Pending</Text>
                             </View>
                           )}
                           <View style={styles.responseActions}>
                             {!response.is_graded && (
-                              <TouchableOpacity style={styles.gradeButton} onPress={() => startGrading(response.response_id)}>
+                              <TouchableOpacity style={[styles.gradeButton, { backgroundColor: colors.success }]} onPress={() => startGrading(response.response_id)}>
                                 <Ionicons name="checkmark-done" size={18} color="#fff" />
                                 <Text style={styles.gradeButtonText}>Grade</Text>
                               </TouchableOpacity>
                             )}
                             {response.is_graded && (
                               <TouchableOpacity style={styles.viewGradeButtonSmall} onPress={() => viewGrade(response)}>
-                                <Ionicons name="eye-outline" size={18} color="#075E54" />
-                                <Text style={styles.viewGradeButtonSmallText}>View</Text>
+                                <Ionicons name="eye-outline" size={18} color={colors.primary} />
+                                <Text style={[styles.viewGradeButtonSmallText, { color: colors.primary }]}>View</Text>
                               </TouchableOpacity>
                             )}
                             <TouchableOpacity onPress={() => deleteResponse(response.response_id)}>
-                              <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+                              <Ionicons name="trash-outline" size={20} color={colors.danger} />
                             </TouchableOpacity>
                           </View>
                         </View>
@@ -956,7 +1153,7 @@ export default function FormResponseScreen() {
               renderItem={renderGradingQuestion}
               scrollEnabled={false}
             />
-            <TouchableOpacity style={styles.submitButton} onPress={submitGrades}>
+            <TouchableOpacity style={[styles.submitButton, { backgroundColor: colors.success }]} onPress={submitGrades}>
               <Ionicons name="save" size={20} color="#fff" />
               <Text style={styles.submitButtonText}>Submit Grades</Text>
             </TouchableOpacity>
@@ -971,145 +1168,137 @@ export default function FormResponseScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5' },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
-  loadingText: { marginTop: 12, fontSize: 16, color: '#666' },
-  errorText: { fontSize: 18, color: '#FF3B30', marginBottom: 16 },
-  backButtonSmall: { backgroundColor: '#25D366', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 },
+  container: { flex: 1 },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { marginTop: 12, fontSize: 16 },
+  errorText: { fontSize: 18, marginBottom: 16 },
+  backButtonSmall: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 },
   backButtonText: { color: '#fff', fontSize: 14, fontWeight: '500' },
-  header: { backgroundColor: '#fff', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: Platform.OS === 'ios' ? 50 : 60, paddingBottom: 12, borderBottomWidth: 0.5, borderBottomColor: '#e0e0e0' },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: Platform.OS === 'ios' ? 50 : 60, paddingBottom: 12, borderBottomWidth: 0.5 },
   backButton: { padding: 4, marginRight: 12 },
-  headerTitle: { flex: 1, fontSize: 18, fontWeight: 'bold', color: '#000000' },
+  headerTitle: { flex: 1, fontSize: 18, fontWeight: 'bold' },
   headerRight: { flexDirection: 'row' },
   menuButton: { padding: 4 },
   menuOverlay: { position: 'absolute', top: Platform.OS === 'ios' ? 50 : 60, right: 16, left: 0, bottom: 0, zIndex: 1000 },
-  dropdownMenu: { position: 'absolute', top: 40, right: 16, backgroundColor: '#fff', borderRadius: 12, paddingVertical: 8, minWidth: 180, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84, elevation: 5, zIndex: 1001 },
+  dropdownMenu: { position: 'absolute', top: 40, right: 16, borderRadius: 12, paddingVertical: 8, minWidth: 180, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84, elevation: 5, zIndex: 1001 },
   menuItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 12 },
-  menuItemText: { fontSize: 15, color: '#000000', fontWeight: '500' },
-  menuDivider: { height: 0.5, backgroundColor: '#e0e0e0' },
-  tabBar: { flexDirection: 'row', backgroundColor: '#fff', paddingHorizontal: 16, borderBottomWidth: 0.5, borderBottomColor: '#e0e0e0' },
+  menuItemText: { fontSize: 15, fontWeight: '500' },
+  tabBar: { flexDirection: 'row', paddingHorizontal: 16, borderBottomWidth: 0.5 },
   tab: { flex: 1, paddingVertical: 14, alignItems: 'center' },
-  tabActive: { borderBottomWidth: 2, borderBottomColor: '#25D366' },
-  tabText: { fontSize: 14, color: '#666', fontWeight: '500' },
-  tabTextActive: { color: '#25D366' },
+  tabActive: { borderBottomWidth: 2 },
+  tabText: { fontSize: 14, fontWeight: '500' },
+  tabTextActive: { fontWeight: '600' },
   content: { flex: 1, padding: 16 },
-  infoSection: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 2 },
-  infoHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, paddingBottom: 8, borderBottomWidth: 0.5, borderBottomColor: '#e0e0e0' },
-  infoIconContainer: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#e8f5e9', alignItems: 'center', justifyContent: 'center' },
-  infoTitle: { fontSize: 14, fontWeight: '600', color: '#25D366' },
-  formTitle: { fontSize: 20, fontWeight: 'bold', color: '#000', marginBottom: 8 },
-  description: { fontSize: 14, color: '#666', lineHeight: 20, marginBottom: 12 },
+  infoSection: { borderRadius: 12, padding: 16, marginBottom: 16, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 2 },
+  infoHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, paddingBottom: 8, borderBottomWidth: 0.5 },
+  infoIconContainer: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  infoTitle: { fontSize: 14, fontWeight: '600' },
+  formTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 8 },
+  description: { fontSize: 14, lineHeight: 20, marginBottom: 12 },
   infoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingTop: 8 },
-  infoBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#f0f0f0', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 15 },
-  infoBadgeText: { fontSize: 11, color: '#666' },
-  questionCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 2 },
+  infoBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 15 },
+  infoBadgeText: { fontSize: 11 },
+  questionCard: { borderRadius: 12, padding: 16, marginBottom: 16, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 2 },
   questionHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 16, gap: 10 },
-  questionNumber: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#25D366', alignItems: 'center', justifyContent: 'center' },
+  questionNumber: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   questionNumberText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
-  questionText: { flex: 1, fontSize: 15, color: '#000', fontWeight: '500', lineHeight: 20 },
-  pointsBadge: { backgroundColor: '#f0f0f0', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  pointsBadgeText: { fontSize: 12, color: '#666', fontWeight: '500' },
-  answerInput: { borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 10, padding: 14, fontSize: 15, minHeight: 100, textAlignVertical: 'top', backgroundColor: '#fafafa', color: '#000' },
+  questionText: { flex: 1, fontSize: 15, fontWeight: '500', lineHeight: 20 },
+  pointsBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  pointsBadgeText: { fontSize: 12, fontWeight: '500' },
+  answerInput: { borderWidth: 1, borderRadius: 10, padding: 14, fontSize: 15, minHeight: 100, textAlignVertical: 'top' },
   optionRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
-  optionText: { fontSize: 15, color: '#333', flex: 1 },
+  optionText: { fontSize: 15, flex: 1 },
   twoButtonRow: { flexDirection: 'row', gap: 12 },
-  acceptButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 10, backgroundColor: '#fff' },
-  declineButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 10, backgroundColor: '#fff' },
-  learnButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 10, backgroundColor: '#fff' },
-  gotItButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 10, backgroundColor: '#fff' },
-  activeButton: { borderColor: '#25D366', backgroundColor: '#e8f5e9' },
-  buttonText: { fontSize: 14, color: '#333', fontWeight: '500' },
-  understandButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#25D366', padding: 14, borderRadius: 10 },
+  acceptButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, borderWidth: 1, borderRadius: 10 },
+  declineButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, borderWidth: 1, borderRadius: 10 },
+  learnButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, borderWidth: 1, borderRadius: 10 },
+  gotItButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, borderWidth: 1, borderRadius: 10 },
+  activeButton: { borderWidth: 2 },
+  buttonText: { fontSize: 14, fontWeight: '500' },
+  understandButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, borderRadius: 10 },
   understandButtonText: { fontSize: 16, fontWeight: 'bold', color: '#fff' },
-  explanationInput: { borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 10, padding: 12, fontSize: 14, minHeight: 80, textAlignVertical: 'top', marginTop: 12, backgroundColor: '#fafafa', color: '#000' },
-  submitButton: { backgroundColor: '#25D366', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16, borderRadius: 12, marginTop: 20, marginBottom: 40 },
+  explanationInput: { borderWidth: 1, borderRadius: 10, padding: 12, fontSize: 14, minHeight: 80, textAlignVertical: 'top', marginTop: 12 },
+  submitButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16, borderRadius: 12, marginTop: 20, marginBottom: 40 },
   submitButtonText: { fontSize: 16, fontWeight: 'bold', color: '#fff' },
-  waitingContainer: { backgroundColor: '#FFF3E0', borderRadius: 12, padding: 30, alignItems: 'center', marginTop: 20, marginBottom: 40 },
-  waitingTitle: { fontSize: 20, fontWeight: 'bold', color: '#FF9800', marginTop: 12, marginBottom: 8 },
-  waitingText: { fontSize: 14, color: '#666', textAlign: 'center', marginBottom: 8 },
-  waitingSubtext: { fontSize: 12, color: '#999', textAlign: 'center', marginBottom: 20 },
-  refreshButton: { backgroundColor: '#FF9800', flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 25 },
+  waitingContainer: { borderRadius: 12, padding: 30, alignItems: 'center', marginTop: 20, marginBottom: 40 },
+  waitingTitle: { fontSize: 20, fontWeight: 'bold', marginTop: 12, marginBottom: 8 },
+  waitingText: { fontSize: 14, textAlign: 'center', marginBottom: 8 },
+  waitingSubtext: { fontSize: 12, textAlign: 'center', marginBottom: 20 },
+  refreshButton: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 25 },
   refreshButtonText: { color: '#fff', fontSize: 14, fontWeight: '500' },
-  gradedContainer: { backgroundColor: '#E8F5E9', borderRadius: 12, padding: 30, alignItems: 'center', marginTop: 20, marginBottom: 40 },
-  gradedTitle: { fontSize: 20, fontWeight: 'bold', color: '#4CAF50', marginTop: 12, marginBottom: 8 },
+  gradedContainer: { borderRadius: 12, padding: 30, alignItems: 'center', marginTop: 20, marginBottom: 40 },
+  gradedTitle: { fontSize: 20, fontWeight: 'bold', marginTop: 12, marginBottom: 8 },
   scorePreview: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginVertical: 12 },
-  scorePreviewText: { fontSize: 18, fontWeight: 'bold', color: '#000' },
-  scorePreviewPercentage: { fontSize: 14, color: '#4CAF50', fontWeight: '600' },
+  scorePreviewText: { fontSize: 18, fontWeight: 'bold' },
+  scorePreviewPercentage: { fontSize: 14, fontWeight: '600' },
   gradedButtonsRow: { flexDirection: 'row', gap: 12, marginTop: 16 },
-  viewGradeButton: { backgroundColor: '#075E54', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 25 },
+  viewGradeButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 25 },
   viewGradeButtonText: { fontSize: 14, fontWeight: 'bold', color: '#fff' },
-  retakeButton: { backgroundColor: '#FF9800', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 25 },
+  retakeButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 25 },
   retakeButtonText: { fontSize: 14, fontWeight: 'bold', color: '#fff' },
-  viewGradeButtonSmall: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#E8F5E9', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
-  viewGradeButtonSmallText: { fontSize: 12, color: '#075E54', fontWeight: '500' },
-  submittedInfoContainer: { backgroundColor: '#E8F5E9', borderRadius: 12, padding: 30, alignItems: 'center', marginTop: 20, marginBottom: 40 },
-  submittedInfoTitle: { fontSize: 20, fontWeight: 'bold', color: '#4CAF50', marginTop: 12, marginBottom: 8 },
-  submittedInfoText: { fontSize: 14, color: '#666', textAlign: 'center' },
-  submittedInfoSubtext: { fontSize: 12, color: '#999', textAlign: 'center', marginTop: 8 },
-  infoMessage: { backgroundColor: '#FFF3E0', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 20, borderRadius: 12, marginTop: 20, marginBottom: 40 },
-  infoMessageText: { fontSize: 14, color: '#FF9800', fontWeight: '500', textAlign: 'center' },
+  viewGradeButtonSmall: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  viewGradeButtonSmallText: { fontSize: 12, fontWeight: '500' },
+  submittedInfoContainer: { borderRadius: 12, padding: 30, alignItems: 'center', marginTop: 20, marginBottom: 40 },
+  submittedInfoTitle: { fontSize: 20, fontWeight: 'bold', marginTop: 12, marginBottom: 8 },
+  submittedInfoText: { fontSize: 14, textAlign: 'center' },
+  submittedInfoSubtext: { fontSize: 12, textAlign: 'center', marginTop: 8 },
+  infoMessage: { flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 20, borderRadius: 12, marginTop: 20, marginBottom: 40 },
+  infoMessageText: { fontSize: 14, fontWeight: '500', textAlign: 'center' },
   responsesSection: { marginTop: 20, marginBottom: 40 },
-  responsesTitle: { fontSize: 18, fontWeight: 'bold', color: '#25D366', marginBottom: 12 },
-  responseCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 2 },
+  responsesTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 12 },
+  responseCard: { borderRadius: 12, padding: 16, marginBottom: 12, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 2 },
   responseHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 12 },
   responseAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   responseInfo: { flex: 1 },
-  responseName: { fontSize: 16, fontWeight: '600', color: '#000' },
-  responseEmail: { fontSize: 12, color: '#666', marginTop: 2 },
-  responseDate: { fontSize: 11, color: '#999', marginTop: 2 },
-  gradedBadge: { backgroundColor: '#4CAF50', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 15 },
+  responseName: { fontSize: 16, fontWeight: '600' },
+  responseEmail: { fontSize: 12, marginTop: 2 },
+  responseDate: { fontSize: 11, marginTop: 2 },
+  gradedBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 15 },
   gradedText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
-  pendingBadge: { backgroundColor: '#FF9800', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 15 },
+  pendingBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 15 },
   pendingText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
-  responseActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 12, marginTop: 8, paddingTop: 8, borderTopWidth: 0.5, borderTopColor: '#e0e0e0' },
-  gradeButton: { backgroundColor: '#25D366', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  responseActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 12, marginTop: 8, paddingTop: 8, borderTopWidth: 0.5 },
+  gradeButton: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   gradeButtonText: { color: '#fff', fontSize: 12, fontWeight: '500' },
-  gradingCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 16, borderLeftWidth: 4, borderLeftColor: '#FF9800', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 2 },
-  answerContainer: { backgroundColor: '#f8f9fa', padding: 12, borderRadius: 8, marginBottom: 12 },
-  answerLabel: { fontSize: 12, fontWeight: '600', color: '#666', marginBottom: 4 },
-  answerText: { fontSize: 14, color: '#000', lineHeight: 20 },
+  gradingCard: { borderRadius: 12, padding: 16, marginBottom: 16, borderLeftWidth: 4, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 2 },
+  answerContainer: { padding: 12, borderRadius: 8, marginBottom: 12 },
+  answerLabel: { fontSize: 12, fontWeight: '600', marginBottom: 4 },
+  answerText: { fontSize: 14, lineHeight: 20 },
   scoreRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
-  scoreLabel: { fontSize: 14, color: '#333', fontWeight: '500' },
-  scoreInput: { borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 8, padding: 8, width: 80, textAlign: 'center', fontSize: 14, backgroundColor: '#fff', color: '#000' },
-  scoreMax: { fontSize: 14, color: '#666' },
-  feedbackInput: { borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 8, padding: 12, fontSize: 14, minHeight: 60, textAlignVertical: 'top', backgroundColor: '#fafafa', color: '#000' },
-  noQuestionsContainer: { backgroundColor: '#fff', borderRadius: 12, padding: 40, alignItems: 'center', marginBottom: 16 },
-  noQuestionsText: { fontSize: 16, fontWeight: '600', color: '#666', marginTop: 12 },
-  noQuestionsSubtext: { fontSize: 14, color: '#999', marginTop: 4, textAlign: 'center' },
-  unsupportedText: { fontSize: 14, color: '#999', fontStyle: 'italic', textAlign: 'center', padding: 20 },
+  scoreLabel: { fontSize: 14, fontWeight: '500' },
+  scoreInput: { borderWidth: 1, borderRadius: 8, padding: 8, width: 80, textAlign: 'center', fontSize: 14 },
+  scoreMax: { fontSize: 14 },
+  feedbackInput: { borderWidth: 1, borderRadius: 8, padding: 12, fontSize: 14, minHeight: 60, textAlignVertical: 'top' },
+  unsupportedText: { fontSize: 14, fontStyle: 'italic', textAlign: 'center', padding: 20 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  resultsModalContainer: { backgroundColor: '#fff', borderRadius: 20, width: '90%', maxHeight: '80%' },
-  resultsModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 0.5, borderBottomColor: '#e0e0e0' },
-  resultsModalTitle: { fontSize: 18, fontWeight: 'bold', color: '#25D366' },
+  resultsModalContainer: { borderRadius: 20, width: '90%', maxHeight: '80%' },
+  resultsModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 0.5 },
+  resultsModalTitle: { fontSize: 18, fontWeight: 'bold' },
   resultsModalContent: { padding: 20 },
-  resultsModalFooter: { padding: 20, borderTopWidth: 0.5, borderTopColor: '#e0e0e0' },
-  scoreSummaryCard: { backgroundColor: '#f8f9fa', borderRadius: 12, padding: 20, alignItems: 'center', marginBottom: 20 },
-  scoreSummaryTitle: { fontSize: 14, color: '#666', marginBottom: 8 },
-  scoreSummaryValue: { fontSize: 32, fontWeight: 'bold', color: '#000' },
-  scoreSummaryPercentage: { fontSize: 18, color: '#25D366', fontWeight: '600', marginTop: 4 },
+  scoreSummaryCard: { borderRadius: 12, padding: 20, alignItems: 'center', marginBottom: 20 },
+  scoreSummaryTitle: { fontSize: 14, marginBottom: 8 },
+  scoreSummaryValue: { fontSize: 32, fontWeight: 'bold' },
+  scoreSummaryPercentage: { fontSize: 18, fontWeight: '600', marginTop: 4 },
   statusBadge: { marginTop: 12, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20 },
   passedBadge: { backgroundColor: '#4CAF50' },
   failedBadge: { backgroundColor: '#FF9800' },
   statusBadgeText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
-  detailedTitle: { fontSize: 16, fontWeight: 'bold', color: '#075E54', marginBottom: 12 },
-  resultItemCard: { backgroundColor: '#fff', borderRadius: 10, padding: 12, marginBottom: 12, borderWidth: 0.5, borderColor: '#e0e0e0' },
+  detailedTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 12 },
+  resultItemCard: { borderRadius: 10, padding: 12, marginBottom: 12, borderWidth: 0.5 },
   resultItemHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 },
-  resultItemNumber: { fontSize: 14, fontWeight: 'bold', color: '#25D366', marginRight: 8 },
-  resultItemText: { flex: 1, fontSize: 14, color: '#000', fontWeight: '500' },
-  resultItemAnswer: { fontSize: 12, color: '#666', marginBottom: 6 },
+  resultItemNumber: { fontSize: 14, fontWeight: 'bold', marginRight: 8 },
+  resultItemText: { flex: 1, fontSize: 14, fontWeight: '500' },
+  resultItemAnswer: { fontSize: 12, marginBottom: 6 },
   resultItemScoreRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  resultItemScoreLabel: { fontSize: 12, color: '#666' },
+  resultItemScoreLabel: { fontSize: 12 },
   resultItemScore: { fontSize: 14, fontWeight: 'bold' },
-  goodScore: { color: '#4CAF50' },
-  averageScore: { color: '#FF9800' },
-  badScore: { color: '#F44336' },
-  resultItemFeedback: { fontSize: 12, color: '#2196F3', marginTop: 6, fontStyle: 'italic' },
-  confirmModal: { backgroundColor: '#fff', borderRadius: 20, padding: 24, width: '85%', alignItems: 'center' },
-  confirmTitle: { fontSize: 20, fontWeight: 'bold', color: '#000', marginTop: 16, marginBottom: 8 },
-  confirmMessage: { fontSize: 14, color: '#666', textAlign: 'center', marginBottom: 24, lineHeight: 20 },
+  resultItemFeedback: { fontSize: 12, marginTop: 6, fontStyle: 'italic' },
+  confirmModal: { borderRadius: 20, padding: 24, width: '85%', alignItems: 'center' },
+  confirmTitle: { fontSize: 20, fontWeight: 'bold', marginTop: 16, marginBottom: 8 },
+  confirmMessage: { fontSize: 14, textAlign: 'center', marginBottom: 24, lineHeight: 20 },
   confirmButtons: { flexDirection: 'row', gap: 12, width: '100%' },
-  confirmCancel: { flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: '#e0e0e0', alignItems: 'center' },
-  confirmCancelText: { fontSize: 14, color: '#666', fontWeight: '500' },
-  confirmRetake: { flex: 1, backgroundColor: '#FF9800', paddingVertical: 12, borderRadius: 10, alignItems: 'center' },
+  confirmCancel: { flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, alignItems: 'center' },
+  confirmCancelText: { fontSize: 14, fontWeight: '500' },
+  confirmRetake: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center' },
   confirmRetakeText: { fontSize: 14, color: '#fff', fontWeight: '500' },
 });

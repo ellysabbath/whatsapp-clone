@@ -20,12 +20,8 @@
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/image.png"
       },
+      "softwareKeyboardLayoutMode": "pan",
       "edgeToEdgeEnabled": true,
-      "config": {
-        "googleMaps": {
-          "apiKey": "AIzaSyDbEqwyQiqgSpPn-A0IIU-TACRZU47To6k"
-        }
-      },
       "permissions": [
         "android.permission.INTERNET",
         "android.permission.ACCESS_COARSE_LOCATION",
@@ -85,13 +81,6 @@
         }
       ],
       [
-        "expo-maps",
-        {
-          "requestLocationPermission": true,
-          "locationPermission": "Allow $(PRODUCT_NAME) to use your location"
-        }
-      ],
-      [
         "expo-image-picker",
         {
           "photosPermission": "Allow $(PRODUCT_NAME) to access your photos.",
@@ -113,9 +102,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "ac3bf1d1-a573-45e2-b8a8-83b923d0c6f6"
+        "projectId": "5fb1ad54-0282-424d-bfc3-9076c1d1efd8"
       }
     },
-    "owner": "ellysabbath28"
+    "owner": "tellyelly"
   }
 }

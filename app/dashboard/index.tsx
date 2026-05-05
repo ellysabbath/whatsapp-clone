@@ -1,4 +1,4 @@
-import { View, Text, FlatList, Platform, TouchableOpacity, StyleSheet, Image, TextInput, StatusBar, Alert, Modal, Animated, ActionSheetIOS, RefreshControl } from 'react-native';
+import { View, Text, FlatList, Platform, TouchableOpacity, StyleSheet, Image, TextInput, ActivityIndicator, StatusBar, Alert, Modal, Animated, ActionSheetIOS, RefreshControl } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -7,9 +7,132 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { chatService, contactService, websocketService, Chat as ChatType, User } from '../../lib/api';
 
 // API Configuration
-const API_BASE_URL = 'http://192.168.137.1:8000';
+const API_BASE_URL = 'https://aptecproject.pythonanywhere.com';
 
-// UI Chat Interface
+// Theme definitions
+const THEMES = {
+  light: {
+    id: 'light',
+    name: 'Light',
+    icon: 'sunny-outline',
+    colors: {
+      primary: '#075E54',
+      background: '#FFFFFF',
+      surface: '#F5F5F5',
+      text: '#000000',
+      textSecondary: '#666666',
+      border: '#E0E0E0',
+      messageBubble: '#DCF8C6',
+      messageBubbleOutgoing: '#E4E6EB',
+    }
+  },
+  dark: {
+    id: 'dark',
+    name: 'Dark',
+    icon: 'moon-outline',
+    colors: {
+      primary: '#128C7E',
+      background: '#111B21',
+      surface: '#202C33',
+      text: '#E9EDEF',
+      textSecondary: '#AEBAC1',
+      border: '#2A3942',
+      messageBubble: '#005C4B',
+      messageBubbleOutgoing: '#1F2C34',
+    }
+  },
+  whatsappGreen: {
+    id: 'whatsappGreen',
+    name: 'WhatsApp Green',
+    icon: 'leaf-outline',
+    colors: {
+      primary: '#25D366',
+      background: '#FFFFFF',
+      surface: '#F0F2F5',
+      text: '#111B21',
+      textSecondary: '#54656F',
+      border: '#E9EDEF',
+      messageBubble: '#DCF8C6',
+      messageBubbleOutgoing: '#E4E6EB',
+    }
+  },
+  midnightBlue: {
+    id: 'midnightBlue',
+    name: 'Midnight Blue',
+    icon: 'moon',
+    colors: {
+      primary: '#1E88E5',
+      background: '#0A1929',
+      surface: '#132F4C',
+      text: '#FFFFFF',
+      textSecondary: '#B0C4DE',
+      border: '#1E3A5F',
+      messageBubble: '#1E3A5F',
+      messageBubbleOutgoing: '#2C4A6E',
+    }
+  },
+  sunsetOrange: {
+    id: 'sunsetOrange',
+    name: 'Sunset Orange',
+    icon: 'sunny',
+    colors: {
+      primary: '#FF5722',
+      background: '#FFF3E0',
+      surface: '#FFE0B2',
+      text: '#4E342E',
+      textSecondary: '#8D6E63',
+      border: '#FFCC80',
+      messageBubble: '#FFE0B2',
+      messageBubbleOutgoing: '#FFCC80',
+    }
+  },
+  purpleHaze: {
+    id: 'purpleHaze',
+    name: 'Purple Haze',
+    icon: 'color-palette-outline',
+    colors: {
+      primary: '#9C27B0',
+      background: '#F3E5F5',
+      surface: '#E1BEE7',
+      text: '#4A148C',
+      textSecondary: '#7B1FA2',
+      border: '#CE93D8',
+      messageBubble: '#E1BEE7',
+      messageBubbleOutgoing: '#CE93D8',
+    }
+  },
+  oceanTeal: {
+    id: 'oceanTeal',
+    name: 'Ocean Teal',
+    icon: 'water-outline',
+    colors: {
+      primary: '#00897B',
+      background: '#E0F2F1',
+      surface: '#B2DFDB',
+      text: '#004D40',
+      textSecondary: '#00695C',
+      border: '#80CBC4',
+      messageBubble: '#B2DFDB',
+      messageBubbleOutgoing: '#80CBC4',
+    }
+  },
+  cherryBlossom: {
+    id: 'cherryBlossom',
+    name: 'Cherry Blossom',
+    icon: 'flower-outline',
+    colors: {
+      primary: '#E91E63',
+      background: '#FCE4EC',
+      surface: '#F8BBD0',
+      text: '#880E4F',
+      textSecondary: '#AD1457',
+      border: '#F48FB1',
+      messageBubble: '#F8BBD0',
+      messageBubbleOutgoing: '#F48FB1',
+    }
+  },
+};
+
 interface UIChat {
   id: string;
   chat_id: string;
@@ -42,35 +165,37 @@ export default function ChatsScreen() {
   const [actionSheetVisible, setActionSheetVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentTheme, setCurrentTheme] = useState('light');
+  const [loading, setLoading] = useState(true);
   
   const slideAnim = useRef(new Animated.Value(-300)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  // Helper function to get valid image URL
+  const theme = THEMES[currentTheme as keyof typeof THEMES];
+  const colors = theme.colors;
+
   const getValidImageUrl = (imageUrl: string | undefined | null): string => {
     const defaultAvatar = 'https://randomuser.me/api/portraits/lego/1.jpg';
-    
-    if (!imageUrl) {
-      return defaultAvatar;
-    }
-    
-    if (imageUrl.startsWith('data:image')) {
-      return imageUrl;
-    }
-    
-    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
-      return imageUrl;
-    }
-    
-    if (imageUrl.startsWith('/')) {
-      return `${API_BASE_URL}${imageUrl}`;
-    }
-    
+    if (!imageUrl) return defaultAvatar;
+    if (imageUrl.startsWith('data:image')) return imageUrl;
+    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) return imageUrl;
+    if (imageUrl.startsWith('/')) return `${API_BASE_URL}${imageUrl}`;
     return defaultAvatar;
   };
 
-  // Load current user and chats
+  const loadTheme = async () => {
+    try {
+      const savedTheme = await AsyncStorage.getItem('app_theme');
+      if (savedTheme && THEMES[savedTheme as keyof typeof THEMES]) {
+        setCurrentTheme(savedTheme);
+      }
+    } catch (error) {
+      console.error('Error loading theme:', error);
+    }
+  };
+
   useEffect(() => {
+    loadTheme();
     loadCurrentUser();
     loadChats();
     setupWebSocket();
@@ -82,6 +207,7 @@ export default function ChatsScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      loadTheme();
       loadChats();
     }, [])
   );
@@ -95,7 +221,6 @@ export default function ChatsScreen() {
       const userStr = await AsyncStorage.getItem('user');
       if (userStr) {
         setCurrentUser(JSON.parse(userStr));
-        console.log('Current user loaded:', JSON.parse(userStr));
       }
     } catch (error) {
       console.error('Error loading current user:', error);
@@ -129,9 +254,9 @@ export default function ChatsScreen() {
 
   const loadChats = async () => {
     try {
+      setLoading(true);
       setRefreshing(true);
       const response = await chatService.getChats();
-      console.log('Chats response:', response.length);
       
       const formattedChats: UIChat[] = response.map(chat => {
         let displayName = 'Unknown';
@@ -147,7 +272,7 @@ export default function ChatsScreen() {
             otherUser = chat.other_participant;
             otherUserId = otherUser.id;
           } else if (chat.participants && chat.participants.length > 0) {
-            const found = chat.participants.find(p => p.user !== currentUser?.id);
+            const found = chat.participants.find((p: any) => p.user !== currentUser?.id);
             if (found && found.user_details) {
               otherUser = found.user_details;
               otherUserId = otherUser.id;
@@ -157,11 +282,9 @@ export default function ChatsScreen() {
           if (otherUser) {
             displayName = otherUser.full_name || otherUser.name || otherUser.mobile_number || 'Unknown';
             displayPhone = otherUser.mobile_number || '';
-            // IMPORTANT: Get profile picture from user_details
             const profilePic = otherUser.profile_picture || otherUser.avatar;
             displayAvatar = getValidImageUrl(profilePic);
             isOnline = otherUser.is_online || otherUser.online || false;
-            console.log(`User ${displayName} avatar:`, profilePic);
           }
         } else {
           displayName = chat.name || 'Group';
@@ -176,29 +299,31 @@ export default function ChatsScreen() {
           message: chat.last_message?.content || 'No messages yet',
           time: formatTime(chat.last_message?.created_at || chat.updated_at),
           avatar: displayAvatar,
-          unread: chat.unread_count,
+          unread: chat.unread_count || 0,
           online: isOnline,
-          muted: chat.is_muted,
-          pinned: chat.is_pinned,
+          muted: chat.is_muted || false,
+          pinned: chat.is_pinned || false,
           typing: false,
           isGroup: chat.chat_type === 'group',
           blocked: false,
-          archived: chat.is_archived,
+          archived: chat.is_archived || false,
           lastMessageTime: new Date(chat.last_message?.created_at || chat.updated_at),
           otherUserId: otherUserId,
         };
       });
       
       setChats(formattedChats);
-      console.log('Formatted chats:', formattedChats.length);
+      setFilteredChats(formattedChats);
     } catch (error: any) {
       console.error('Error loading chats:', error);
     } finally {
+      setLoading(false);
       setRefreshing(false);
     }
   };
 
   const formatTime = (dateString: string): string => {
+    if (!dateString) return '';
     const date = new Date(dateString);
     const now = new Date();
     const diff = now.getTime() - date.getTime();
@@ -249,17 +374,17 @@ export default function ChatsScreen() {
     setChats(prevChats => prevChats.map(chat => 
       chat.chat_id === chatId ? { ...chat, ...updates } : chat
     ));
+    setFilteredChats(prev => prev.map(chat => 
+      chat.chat_id === chatId ? { ...chat, ...updates } : chat
+    ));
   };
 
-  // Function to mark messages as read when clicking on chat
   const markChatAsRead = async (chatId: string) => {
     try {
-      // Find the chat
       const chat = chats.find(c => c.chat_id === chatId);
       if (chat && chat.unread > 0) {
-        // Update local state immediately for UI response
+        await chatService.markMessagesAsRead(chatId);
         updateChat(chatId, { unread: 0 });
-        console.log(`Marked chat ${chatId} as read`);
       }
     } catch (error) {
       console.error('Error marking chat as read:', error);
@@ -299,6 +424,7 @@ export default function ChatsScreen() {
       await chatService.deleteChat(chat.chat_id);
       await loadChats();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('Success', 'Chat deleted successfully');
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to delete chat');
     }
@@ -307,9 +433,10 @@ export default function ChatsScreen() {
   const togglePinChat = async (chat: UIChat) => {
     try {
       const newPinState = !chat.pinned;
-      await chatService.pinChat(chat.chat_id, newPinState);
-      updateChat(chat.chat_id, { pinned: newPinState });
+      const result = await chatService.pinChat(chat.chat_id, newPinState);
+      updateChat(chat.chat_id, { pinned: result.pinned });
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      Alert.alert('Success', newPinState ? 'Chat pinned' : 'Chat unpinned');
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to pin/unpin chat');
     }
@@ -318,8 +445,9 @@ export default function ChatsScreen() {
   const toggleMuteChat = async (chat: UIChat) => {
     try {
       const newMuteState = !chat.muted;
-      await chatService.muteChat(chat.chat_id, newMuteState);
-      updateChat(chat.chat_id, { muted: newMuteState });
+      const result = await chatService.muteChat(chat.chat_id, newMuteState);
+      updateChat(chat.chat_id, { muted: result.muted });
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       Alert.alert('Success', newMuteState ? 'Chat muted' : 'Chat unmuted');
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to mute/unmute chat');
@@ -329,7 +457,7 @@ export default function ChatsScreen() {
   const blockContact = async (chat: UIChat) => {
     Alert.alert(
       'Block Contact',
-      `Block ${chat.name}?`,
+      `Block ${chat.name}? You won't receive messages from them anymore.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { 
@@ -337,16 +465,10 @@ export default function ChatsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              const contacts = await contactService.getContacts();
-              const contact = contacts.find(c => 
-                c.contact_user_details.full_name === chat.name || 
-                c.contact_user_details.mobile_number === chat.phoneNumber
-              );
-              if (contact) {
-                await contactService.blockContact(contact.id);
-                updateChat(chat.chat_id, { blocked: true });
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-              }
+              await chatService.blockUser(chat.chat_id);
+              updateChat(chat.chat_id, { blocked: true });
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+              Alert.alert('Success', `${chat.name} has been blocked`);
             } catch (error: any) {
               Alert.alert('Error', error.message || 'Failed to block contact');
             }
@@ -358,10 +480,10 @@ export default function ChatsScreen() {
 
   const archiveChat = async (chat: UIChat) => {
     try {
-      await chatService.archiveChat(chat.chat_id);
-      updateChat(chat.chat_id, { archived: true });
+      const result = await chatService.archiveChat(chat.chat_id);
+      updateChat(chat.chat_id, { archived: result.archived });
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      Alert.alert('Archived', 'Chat moved to archive');
+      Alert.alert('Success', result.archived ? 'Chat archived' : 'Chat unarchived');
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to archive chat');
     }
@@ -369,9 +491,12 @@ export default function ChatsScreen() {
 
   const unarchiveChat = async (chat: UIChat) => {
     try {
-      await chatService.archiveChat(chat.chat_id);
+      const result = await chatService.archiveChat(chat.chat_id);
       updateChat(chat.chat_id, { archived: false });
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      if (selectedFilter === 'archived') {
+        setSelectedFilter('all');
+      }
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to unarchive chat');
     }
@@ -380,20 +505,27 @@ export default function ChatsScreen() {
   const markAsUnread = (chat: UIChat) => {
     updateChat(chat.chat_id, { unread: chat.unread + 1 });
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Alert.alert('Success', 'Chat marked as unread');
   };
 
   const clearChat = (chat: UIChat) => {
     Alert.alert(
       'Clear Chat',
-      'Clear all messages?',
+      `Clear all messages in "${chat.name}"? This cannot be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { 
           text: 'Clear', 
           style: 'destructive',
           onPress: async () => {
-            updateChat(chat.chat_id, { message: 'No messages yet' });
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            try {
+              await chatService.clearMessages(chat.chat_id);
+              updateChat(chat.chat_id, { message: 'No messages yet' });
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert('Success', 'Chat cleared successfully');
+            } catch (error: any) {
+              Alert.alert('Error', error.message || 'Failed to clear chat');
+            }
           }
         }
       ]
@@ -443,19 +575,16 @@ export default function ChatsScreen() {
     }
   };
 
-  // Handle chat press - marks messages as read before navigating
   const handleChatPress = (chat: UIChat) => {
     if (chat.blocked) {
-      Alert.alert('Blocked Contact', `You have blocked ${chat.name}.`);
+      Alert.alert('Blocked Contact', `You have blocked ${chat.name}. Unblock to send messages.`);
       return;
     }
     
-    // Mark chat as read (reset unread count)
     if (chat.unread > 0) {
       markChatAsRead(chat.chat_id);
     }
     
-    // Navigate to chat detail
     router.push(`/chat/${chat.chat_id}`);
   };
 
@@ -474,6 +603,9 @@ export default function ChatsScreen() {
           break;
         case 'starredMessages':
           router.push('/dashboard/starred');
+          break;
+        case 'shareQR':
+          router.push('/dashboard/qr');
           break;
         case 'settings':
           router.push('/dashboard/set');
@@ -533,31 +665,25 @@ export default function ChatsScreen() {
     loadChats();
   }, []);
 
-  // Chat Avatar Component with error handling
   const ChatAvatar = ({ uri, online }: { uri: string; online: boolean }) => {
     const [imageError, setImageError] = useState(false);
     const validUri = getValidImageUrl(uri);
-    
-    console.log('Avatar URI:', validUri);
     
     return (
       <View style={styles.avatarContainer}>
         <Image 
           source={{ uri: imageError ? 'https://randomuser.me/api/portraits/lego/1.jpg' : validUri }} 
           style={styles.avatar}
-          onError={(e) => {
-            console.log('Image failed to load:', validUri, e.nativeEvent.error);
-            setImageError(true);
-          }}
+          onError={() => setImageError(true)}
         />
-        {online && <View style={styles.onlineBadge} />}
+        {online && <View style={[styles.onlineBadge, { borderColor: colors.background }]} />}
       </View>
     );
   };
 
   const renderChat = ({ item }: { item: UIChat }) => (
     <TouchableOpacity 
-      style={[styles.chatItem, item.blocked && styles.blockedChat]}
+      style={[styles.chatItem, { borderBottomColor: colors.border }, item.blocked && styles.blockedChat]}
       onPress={() => handleChatPress(item)}
       onLongPress={() => showChatOptions(item)}
       activeOpacity={0.7}
@@ -569,19 +695,18 @@ export default function ChatsScreen() {
         <View style={styles.chatHeader}>
           <View style={styles.nameContainer}>
             {item.pinned && (
-              <Ionicons name="pin" size={14} color="#999" style={styles.pinIcon} />
+              <Ionicons name="pin" size={14} color={colors.textSecondary} style={styles.pinIcon} />
             )}
-            <Text style={[styles.chatName, item.unread > 0 && styles.boldName]} numberOfLines={1}>
+            <Text style={[styles.chatName, { color: colors.text }, item.unread > 0 && styles.boldName]} numberOfLines={1}>
               {item.name}
-              {item.blocked && <Text style={styles.blockedText}> (Blocked)</Text>}
+              {item.blocked && <Text style={[styles.blockedText, { color: colors.textSecondary }]}> (Blocked)</Text>}
             </Text>
           </View>
-          <Text style={[styles.chatTime, item.unread > 0 && styles.boldTime]}>{item.time}</Text>
+          <Text style={[styles.chatTime, { color: colors.textSecondary }, item.unread > 0 && styles.boldTime]}>{item.time}</Text>
         </View>
         
-        {/* Display phone number for individual chats */}
         {!item.isGroup && item.phoneNumber ? (
-          <Text style={styles.phoneNumber} numberOfLines={1}>
+          <Text style={[styles.phoneNumber, { color: colors.textSecondary }]} numberOfLines={1}>
             {item.phoneNumber}
           </Text>
         ) : null}
@@ -589,12 +714,13 @@ export default function ChatsScreen() {
         <View style={styles.chatFooter}>
           <View style={styles.messageContainer}>
             {item.typing && !item.blocked ? (
-              <Text style={styles.typingText}>typing...</Text>
+              <Text style={[styles.typingText, { color: colors.primary }]}>typing...</Text>
             ) : (
               <Text style={[
                 styles.lastMessage, 
-                item.unread > 0 && styles.unreadMessage,
-                item.blocked && styles.blockedMessage
+                { color: colors.textSecondary },
+                item.unread > 0 && { color: colors.text, fontWeight: '500' },
+                item.blocked && { color: colors.textSecondary, fontStyle: 'italic' }
               ]} numberOfLines={1}>
                 {item.blocked ? 'You have blocked this contact' : item.message}
               </Text>
@@ -603,11 +729,11 @@ export default function ChatsScreen() {
           
           {!item.typing && !item.blocked && (
             item.unread > 0 ? (
-              <View style={styles.unreadBadge}>
+              <View style={[styles.unreadBadge, { backgroundColor: colors.primary }]}>
                 <Text style={styles.unreadText}>{item.unread}</Text>
               </View>
             ) : (
-              <Ionicons name="checkmark-done" size={16} color="#999" />
+              <Ionicons name="checkmark-done" size={16} color={colors.textSecondary} />
             )
           )}
         </View>
@@ -617,123 +743,135 @@ export default function ChatsScreen() {
 
   const renderArchiveChat = ({ item }: { item: UIChat }) => (
     <TouchableOpacity 
-      style={styles.chatItem}
+      style={[styles.chatItem, { borderBottomColor: colors.border }]}
       onPress={() => unarchiveChat(item)}
       onLongPress={() => showChatOptions(item)}
       activeOpacity={0.7}
     >
       <ChatAvatar uri={item.avatar} online={false} />
       <View style={styles.chatInfo}>
-        <Text style={styles.chatName}>{item.name}</Text>
+        <Text style={[styles.chatName, { color: colors.text }]}>{item.name}</Text>
         {!item.isGroup && item.phoneNumber ? (
-          <Text style={styles.phoneNumber} numberOfLines={1}>{item.phoneNumber}</Text>
+          <Text style={[styles.phoneNumber, { color: colors.textSecondary }]} numberOfLines={1}>{item.phoneNumber}</Text>
         ) : null}
-        <Text style={styles.lastMessage} numberOfLines={1}>{item.message}</Text>
+        <Text style={[styles.lastMessage, { color: colors.textSecondary }]} numberOfLines={1}>{item.message}</Text>
       </View>
       <TouchableOpacity onPress={() => unarchiveChat(item)} style={styles.unarchiveButton}>
-        <Ionicons name="archive-outline" size={20} color="#25D366" />
+        <Ionicons name="folder-open-outline" size={20} color={colors.primary} />
       </TouchableOpacity>
     </TouchableOpacity>
   );
 
+  if (loading && chats.length === 0) {
+    return (
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading chats...</Text>
+      </View>
+    );
+  }
+
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={currentTheme === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Chats</Text>
+      <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Chats</Text>
         <View style={styles.headerIcons}>
           <TouchableOpacity style={styles.headerIcon} onPress={() => router.push('/dashboard/camera')}>
-            <Ionicons name="camera-outline" size={22} color="#000000" />
+            <Ionicons name="camera-outline" size={22} color={colors.text} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.headerIcon} onPress={() => router.push('/dashboard/search')}>
-            <Ionicons name="search" size={22} color="#000000" />
+            <Ionicons name="search" size={22} color={colors.text} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.headerIcon} onPress={handleMenuPress}>
-            <Ionicons name="ellipsis-vertical" size={20} color="#000000" />
+            <Ionicons name="ellipsis-vertical" size={20} color={colors.text} />
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Dropdown Menu */}
+      {/* Dropdown Menu - Added Share/QR Code option */}
       <Modal transparent={true} visible={menuVisible} animationType="none" onRequestClose={closeMenu}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={closeMenu}>
-          <Animated.View style={[styles.dropdownMenu, { transform: [{ translateY: slideAnim }], opacity: fadeAnim }]}>
+          <Animated.View style={[styles.dropdownMenu, { backgroundColor: colors.surface, transform: [{ translateY: slideAnim }], opacity: fadeAnim }]}>
             <TouchableOpacity style={styles.menuItem} onPress={() => handleMenuItem('newGroup')}>
-              <Ionicons name="people-outline" size={22} color="#000000" />
-              <Text style={styles.menuItemText}>New group</Text>
+              <Ionicons name="people-outline" size={22} color={colors.text} />
+              <Text style={[styles.menuItemText, { color: colors.text }]}>New group</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={() => handleMenuItem('newBroadcast')}>
-              <Ionicons name="megaphone-outline" size={22} color="#000000" />
-              <Text style={styles.menuItemText}>New broadcast</Text>
+              <Ionicons name="megaphone-outline" size={22} color={colors.text} />
+              <Text style={[styles.menuItemText, { color: colors.text }]}>New broadcast</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={() => handleMenuItem('starredMessages')}>
-              <Ionicons name="star-outline" size={22} color="#000000" />
-              <Text style={styles.menuItemText}>Starred messages</Text>
+              <Ionicons name="star-outline" size={22} color={colors.text} />
+              <Text style={[styles.menuItemText, { color: colors.text }]}>Starred messages</Text>
             </TouchableOpacity>
-            {/* <TouchableOpacity style={styles.menuItem} onPress={() => handleMenuItem('archived')}>
-              <Ionicons name="archive-outline" size={22} color="#000000" />
-              <Text style={styles.menuItemText}>Archived chats</Text>
-            </TouchableOpacity> */}
-            <View style={styles.menuDivider} />
+            
+            {/* New Share/QR Code Menu Item */}
+            <TouchableOpacity style={styles.menuItem} onPress={() => handleMenuItem('shareQR')}>
+              <Ionicons name="qr-code-outline" size={22} color={colors.primary} />
+              <Text style={[styles.menuItemText, { color: colors.text }]}>Share QR Code</Text>
+            </TouchableOpacity>
+            
+            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
             <TouchableOpacity style={styles.menuItem} onPress={() => handleMenuItem('forms')}>
-              <Ionicons name="document-text-outline" size={22} color="#000000" />
-              <Text style={styles.menuItemText}>View Forms</Text>
+              <Ionicons name="document-text-outline" size={22} color={colors.text} />
+              <Text style={[styles.menuItemText, { color: colors.text }]}>View Forms</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={() => handleMenuItem('createForm')}>
-              <Ionicons name="create-outline" size={22} color="#000000" />
-              <Text style={styles.menuItemText}>Create Form</Text>
+              <Ionicons name="create-outline" size={22} color={colors.text} />
+              <Text style={[styles.menuItemText, { color: colors.text }]}>Create Form</Text>
             </TouchableOpacity>
-            <View style={styles.menuDivider} />
+            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
             <TouchableOpacity style={styles.menuItem} onPress={() => handleMenuItem('profile')}>
-              <Ionicons name="person-outline" size={22} color="#000000" />
-              <Text style={styles.menuItemText}>Profile</Text>
+              <Ionicons name="person-outline" size={22} color={colors.text} />
+              <Text style={[styles.menuItemText, { color: colors.text }]}>Profile</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={() => handleMenuItem('settings')}>
-              <Ionicons name="settings-outline" size={22} color="#000000" />
-              <Text style={styles.menuItemText}>Settings</Text>
+              <Ionicons name="settings-outline" size={22} color={colors.text} />
+              <Text style={[styles.menuItemText, { color: colors.text }]}>Settings</Text>
             </TouchableOpacity>
           </Animated.View>
         </TouchableOpacity>
       </Modal>
 
       {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
+      <View style={[styles.searchContainer, { backgroundColor: colors.surface }]}>
+        <Ionicons name="search" size={20} color={colors.textSecondary} style={styles.searchIcon} />
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, { color: colors.text }]}
           placeholder="Search chats..."
-          placeholderTextColor="#666"
+          placeholderTextColor={colors.textSecondary}
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
         {searchQuery !== '' && (
           <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Ionicons name="close-circle" size={20} color="#666" />
+            <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
         )}
       </View>
 
       {/* Filter Tabs */}
-      <View style={styles.filterContainer}>
+      <View style={[styles.filterContainer, { borderBottomColor: colors.border }]}>
         <TouchableOpacity 
-          style={[styles.filterTab, selectedFilter === 'all' && styles.filterTabActive]}
+          style={[styles.filterTab, selectedFilter === 'all' && { backgroundColor: colors.primary + '20' }]}
           onPress={() => setSelectedFilter('all')}
         >
-          <Text style={[styles.filterText, selectedFilter === 'all' && styles.filterTextActive]}>All</Text>
+          <Text style={[styles.filterText, { color: colors.text }, selectedFilter === 'all' && { color: colors.primary, fontWeight: '600' }]}>All</Text>
         </TouchableOpacity>
         <TouchableOpacity 
-          style={[styles.filterTab, selectedFilter === 'unread' && styles.filterTabActive]}
+          style={[styles.filterTab, selectedFilter === 'unread' && { backgroundColor: colors.primary + '20' }]}
           onPress={() => setSelectedFilter('unread')}
         >
-          <Text style={[styles.filterText, selectedFilter === 'unread' && styles.filterTextActive]}>Unread</Text>
+          <Text style={[styles.filterText, { color: colors.text }, selectedFilter === 'unread' && { color: colors.primary, fontWeight: '600' }]}>Unread</Text>
         </TouchableOpacity>
         <TouchableOpacity 
-          style={[styles.filterTab, selectedFilter === 'groups' && styles.filterTabActive]}
+          style={[styles.filterTab, selectedFilter === 'groups' && { backgroundColor: colors.primary + '20' }]}
           onPress={() => setSelectedFilter('groups')}
         >
-          <Text style={[styles.filterText, selectedFilter === 'groups' && styles.filterTextActive]}>Groups</Text>
+          <Text style={[styles.filterText, { color: colors.text }, selectedFilter === 'groups' && { color: colors.primary, fontWeight: '600' }]}>Groups</Text>
         </TouchableOpacity>
       </View>
 
@@ -746,12 +884,15 @@ export default function ChatsScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.chatsList}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#25D366"]} tintColor="#25D366" />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} tintColor={colors.primary} />
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Ionicons name="archive-outline" size={80} color="#ddd" />
-              <Text style={styles.emptyText}>No archived chats</Text>
+              <Ionicons name="archive-outline" size={80} color={colors.textSecondary} />
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No archived chats</Text>
+              <TouchableOpacity onPress={() => setSelectedFilter('all')}>
+                <Text style={[styles.emptySubtext, { color: colors.primary }]}>Go back to chats</Text>
+              </TouchableOpacity>
             </View>
           }
         />
@@ -763,13 +904,13 @@ export default function ChatsScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.chatsList}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#25D366"]} tintColor="#25D366" />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} tintColor={colors.primary} />
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Ionicons name="chatbubbles-outline" size={80} color="#ddd" />
-              <Text style={styles.emptyText}>No chats found</Text>
-              <Text style={styles.emptySubtext}>
+              <Ionicons name="chatbubbles-outline" size={80} color={colors.textSecondary} />
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No chats found</Text>
+              <Text style={[styles.emptySubtext, { color: colors.textSecondary + '80' }]}>
                 {searchQuery ? 'Try a different search' : 'Start a new conversation'}
               </Text>
             </View>
@@ -778,12 +919,12 @@ export default function ChatsScreen() {
       )}
 
       {/* FAB Button */}
-      <TouchableOpacity style={styles.fab} onPress={() => router.push('/dashboard/contacts')}>
-        <Ionicons name="chatbubble-ellipses" size={24} color="#000000" />
+      <TouchableOpacity style={[styles.fab, { backgroundColor: colors.primary }]} onPress={() => router.push('/dashboard/contacts')}>
+        <Ionicons name="chatbubble-ellipses" size={24} color="#FFFFFF" />
       </TouchableOpacity>
 
       {/* Bottom Tab Navigation */}
-      <View style={styles.bottomTab}>
+      <View style={[styles.bottomTab, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
         <TouchableOpacity 
           style={[styles.tabItem, activeTab === 'chats' && styles.tabItemActive]}
           onPress={() => handleTabPress('chats')}
@@ -791,9 +932,9 @@ export default function ChatsScreen() {
           <Ionicons 
             name={activeTab === 'chats' ? "chatbubbles" : "chatbubbles-outline"} 
             size={24} 
-            color={activeTab === 'chats' ? "#25D366" : "#000000"} 
+            color={activeTab === 'chats' ? colors.primary : colors.textSecondary} 
           />
-          <Text style={[styles.tabLabel, activeTab === 'chats' && styles.tabLabelActive]}>Chats</Text>
+          <Text style={[styles.tabLabel, { color: activeTab === 'chats' ? colors.primary : colors.textSecondary }]}>Chats</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
@@ -803,9 +944,9 @@ export default function ChatsScreen() {
           <Ionicons 
             name={activeTab === 'updates' ? "time" : "time-outline"} 
             size={24} 
-            color={activeTab === 'updates' ? "#25D366" : "#000000"} 
+            color={activeTab === 'updates' ? colors.primary : colors.textSecondary} 
           />
-          <Text style={[styles.tabLabel, activeTab === 'updates' && styles.tabLabelActive]}>Updates</Text>
+          <Text style={[styles.tabLabel, { color: activeTab === 'updates' ? colors.primary : colors.textSecondary }]}>Updates</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
@@ -815,9 +956,9 @@ export default function ChatsScreen() {
           <Ionicons 
             name={activeTab === 'profile' ? "person" : "person-outline"} 
             size={24} 
-            color={activeTab === 'profile' ? "#25D366" : "#000000"} 
+            color={activeTab === 'profile' ? colors.primary : colors.textSecondary} 
           />
-          <Text style={[styles.tabLabel, activeTab === 'profile' && styles.tabLabelActive]}>Profile</Text>
+          <Text style={[styles.tabLabel, { color: activeTab === 'profile' ? colors.primary : colors.textSecondary }]}>Profile</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
@@ -827,34 +968,34 @@ export default function ChatsScreen() {
           <Ionicons 
             name={activeTab === 'newBroadcast' ? "megaphone" : "megaphone-outline"} 
             size={24} 
-            color={activeTab === 'newBroadcast' ? "#25D366" : "#000000"} 
+            color={activeTab === 'newBroadcast' ? colors.primary : colors.textSecondary} 
           />
-          <Text style={[styles.tabLabel, activeTab === 'newBroadcast' && styles.tabLabelActive]}>Broadcast</Text>
+          <Text style={[styles.tabLabel, { color: activeTab === 'newBroadcast' ? colors.primary : colors.textSecondary }]}>Broadcast</Text>
         </TouchableOpacity>
       </View>
 
       {/* Android Action Sheet */}
       <Modal visible={actionSheetVisible} transparent={true} animationType="fade" onRequestClose={() => setActionSheetVisible(false)}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setActionSheetVisible(false)}>
-          <View style={styles.androidActionSheet}>
-            <View style={styles.actionSheetHeader}>
-              <Text style={styles.actionSheetTitle}>{selectedChat?.name}</Text>
+          <View style={[styles.androidActionSheet, { backgroundColor: colors.background }]}>
+            <View style={[styles.actionSheetHeader, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.actionSheetTitle, { color: colors.text }]}>{selectedChat?.name}</Text>
             </View>
             <TouchableOpacity style={styles.actionSheetItem} onPress={() => { if(selectedChat) togglePinChat(selectedChat); setActionSheetVisible(false); }}>
-              <Ionicons name="pin-outline" size={22} color="#333" />
-              <Text style={styles.actionSheetItemText}>{selectedChat?.pinned ? 'Unpin' : 'Pin'}</Text>
+              <Ionicons name="pin-outline" size={22} color={colors.text} />
+              <Text style={[styles.actionSheetItemText, { color: colors.text }]}>{selectedChat?.pinned ? 'Unpin' : 'Pin'}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionSheetItem} onPress={() => { if(selectedChat) toggleMuteChat(selectedChat); setActionSheetVisible(false); }}>
-              <Ionicons name="notifications-off-outline" size={22} color="#333" />
-              <Text style={styles.actionSheetItemText}>{selectedChat?.muted ? 'Unmute' : 'Mute'}</Text>
+              <Ionicons name="notifications-off-outline" size={22} color={colors.text} />
+              <Text style={[styles.actionSheetItemText, { color: colors.text }]}>{selectedChat?.muted ? 'Unmute' : 'Mute'}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionSheetItem} onPress={() => { if(selectedChat) markAsUnread(selectedChat); setActionSheetVisible(false); }}>
-              <Ionicons name="mail-unread-outline" size={22} color="#333" />
-              <Text style={styles.actionSheetItemText}>Mark as unread</Text>
+              <Ionicons name="mail-unread-outline" size={22} color={colors.text} />
+              <Text style={[styles.actionSheetItemText, { color: colors.text }]}>Mark as unread</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionSheetItem} onPress={() => { if(selectedChat) archiveChat(selectedChat); setActionSheetVisible(false); }}>
-              <Ionicons name="archive-outline" size={22} color="#333" />
-              <Text style={styles.actionSheetItemText}>Archive</Text>
+              <Ionicons name="archive-outline" size={22} color={colors.text} />
+              <Text style={[styles.actionSheetItemText, { color: colors.text }]}>Archive</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionSheetItem} onPress={() => { if(selectedChat) clearChat(selectedChat); setActionSheetVisible(false); }}>
               <Ionicons name="trash-outline" size={22} color="#FF3B30" />
@@ -864,8 +1005,8 @@ export default function ChatsScreen() {
               <Ionicons name="trash-bin-outline" size={22} color="#FF3B30" />
               <Text style={[styles.actionSheetItemText, { color: '#FF3B30' }]}>Delete chat</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionSheetCancel} onPress={() => setActionSheetVisible(false)}>
-              <Text style={styles.actionSheetCancelText}>Cancel</Text>
+            <TouchableOpacity style={[styles.actionSheetCancel, { borderTopColor: colors.border }]} onPress={() => setActionSheetVisible(false)}>
+              <Text style={[styles.actionSheetCancelText, { color: colors.primary }]}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -877,12 +1018,17 @@ export default function ChatsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
   },
-  
-  // Header
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+  },
   header: {
-    backgroundColor: '#FFFFFF',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -890,12 +1036,10 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'ios' ? 50 : 76,
     paddingBottom: 12,
     borderBottomWidth: 0.5,
-    borderBottomColor: '#E0E0E0',
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#000000',
   },
   headerIcons: {
     flexDirection: 'row',
@@ -904,8 +1048,6 @@ const styles = StyleSheet.create({
   headerIcon: {
     padding: 4,
   },
-  
-  // Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -914,7 +1056,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: Platform.OS === 'ios' ? 100 : 70,
     right: 12,
-    backgroundColor: '#fff',
     borderRadius: 12,
     paddingVertical: 8,
     minWidth: 220,
@@ -934,19 +1075,14 @@ const styles = StyleSheet.create({
   },
   menuItemText: {
     fontSize: 16,
-    color: '#000000',
   },
   menuDivider: {
     height: 1,
-    backgroundColor: '#e0e0e0',
     marginVertical: 4,
   },
-  
-  // Search
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f0f0f0',
     margin: 12,
     marginTop: 8,
     paddingHorizontal: 12,
@@ -959,16 +1095,12 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#000',
   },
-  
-  // Filter Tabs
   filterContainer: {
     flexDirection: 'row',
     paddingHorizontal: 12,
     paddingBottom: 8,
     borderBottomWidth: 0.5,
-    borderBottomColor: '#e0e0e0',
   },
   filterTab: {
     paddingHorizontal: 16,
@@ -976,20 +1108,10 @@ const styles = StyleSheet.create({
     marginRight: 8,
     borderRadius: 20,
   },
-  filterTabActive: {
-    backgroundColor: '#e8f5e9',
-  },
   filterText: {
     fontSize: 14,
-    color: '#000000',
     fontWeight: '500',
   },
-  filterTextActive: {
-    color: '#25D366',
-    fontWeight: '600',
-  },
-  
-  // Chat List
   chatsList: {
     paddingBottom: 180,
   },
@@ -998,6 +1120,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     alignItems: 'center',
+    borderBottomWidth: 0.5,
   },
   blockedChat: {
     opacity: 0.7,
@@ -1021,7 +1144,6 @@ const styles = StyleSheet.create({
     borderRadius: 7,
     backgroundColor: '#25D366',
     borderWidth: 2,
-    borderColor: '#fff',
   },
   chatInfo: {
     flex: 1,
@@ -1044,31 +1166,25 @@ const styles = StyleSheet.create({
   chatName: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#000',
     flex: 1,
   },
   boldName: {
     fontWeight: '700',
-    color: '#000',
   },
   phoneNumber: {
     fontSize: 12,
-    color: '#888',
     marginBottom: 2,
   },
   blockedText: {
     fontSize: 13,
-    color: '#999',
     fontStyle: 'italic',
   },
   chatTime: {
     fontSize: 11,
-    color: '#999',
     marginLeft: 8,
   },
   boldTime: {
     fontWeight: '600',
-    color: '#000',
   },
   chatFooter: {
     flexDirection: 'row',
@@ -1082,24 +1198,13 @@ const styles = StyleSheet.create({
   },
   lastMessage: {
     fontSize: 13,
-    color: '#666',
     flex: 1,
-  },
-  unreadMessage: {
-    color: '#000',
-    fontWeight: '500',
-  },
-  blockedMessage: {
-    color: '#999',
-    fontStyle: 'italic',
   },
   typingText: {
     fontSize: 13,
-    color: '#25D366',
     fontStyle: 'italic',
   },
   unreadBadge: {
-    backgroundColor: '#25D366',
     borderRadius: 12,
     minWidth: 20,
     height: 20,
@@ -1113,13 +1218,10 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: 'bold',
   },
-  
-  // FAB
   fab: {
     position: 'absolute',
     bottom: 180,
     right: 20,
-    backgroundColor: '#25D366',
     width: 56,
     height: 56,
     borderRadius: 28,
@@ -1131,8 +1233,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
   },
-  
-  // Empty State
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -1141,27 +1241,20 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 18,
-    color: '#999',
     marginTop: 16,
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#bbb',
     marginTop: 8,
   },
-  
-  // Archive
   unarchiveButton: {
     padding: 8,
   },
-  
-  // Android Action Sheet
   androidActionSheet: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#fff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingBottom: Platform.OS === 'ios' ? 30 : 40,
@@ -1169,12 +1262,10 @@ const styles = StyleSheet.create({
   actionSheetHeader: {
     padding: 16,
     borderBottomWidth: 0.5,
-    borderBottomColor: '#e0e0e0',
   },
   actionSheetTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#000',
     textAlign: 'center',
   },
   actionSheetItem: {
@@ -1185,27 +1276,20 @@ const styles = StyleSheet.create({
   },
   actionSheetItemText: {
     fontSize: 16,
-    color: '#333',
   },
   actionSheetCancel: {
     padding: 16,
     borderTopWidth: 0.5,
-    borderTopColor: '#e0e0e0',
     marginTop: 8,
   },
   actionSheetCancelText: {
     fontSize: 16,
-    color: '#007AFF',
     fontWeight: '600',
     textAlign: 'center',
   },
-  
-  // Bottom Tab
   bottomTab: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
     borderTopWidth: 0.5,
-    borderTopColor: '#e0e0e0',
     paddingVertical: 8,
     paddingBottom: Platform.OS === 'ios' ? 28 : 76,
     position: 'absolute',
@@ -1221,10 +1305,5 @@ const styles = StyleSheet.create({
   },
   tabLabel: {
     fontSize: 12,
-    color: '#000000',
-  },
-  tabLabelActive: {
-    color: '#25D366',
-    fontWeight: '500',
   },
 });

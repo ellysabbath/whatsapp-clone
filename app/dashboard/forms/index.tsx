@@ -1,8 +1,157 @@
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Platform, Modal, KeyboardAvoidingView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { formService, Question, CreateFormData } from '../../../lib/api/services/form.service';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Theme definitions
+const THEMES = {
+  light: {
+    id: 'light',
+    colors: {
+      primary: '#075E54',
+      success: '#25D366',
+      danger: '#FF3B30',
+      background: '#F5F5F5',
+      cardBg: '#FFFFFF',
+      surface: '#F8F9FA',
+      modalBg: '#FFFFFF',
+      text: '#000000',
+      textSecondary: '#666666',
+      textTertiary: '#999999',
+      border: '#E0E0E0',
+      placeholder: '#CCCCCC',
+      questionBg: '#F8F9FA',
+    }
+  },
+  dark: {
+    id: 'dark',
+    colors: {
+      primary: '#128C7E',
+      success: '#25D366',
+      danger: '#FF5C5C',
+      background: '#111B21',
+      cardBg: '#202C33',
+      surface: '#202C33',
+      modalBg: '#202C33',
+      text: '#E9EDEF',
+      textSecondary: '#AEBAC1',
+      textTertiary: '#8696A0',
+      border: '#2A3942',
+      placeholder: '#3D4B55',
+      questionBg: '#2A3942',
+    }
+  },
+  whatsappGreen: {
+    id: 'whatsappGreen',
+    colors: {
+      primary: '#25D366',
+      success: '#25D366',
+      danger: '#FF3B30',
+      background: '#F0F2F5',
+      cardBg: '#FFFFFF',
+      surface: '#FFFFFF',
+      modalBg: '#FFFFFF',
+      text: '#111B21',
+      textSecondary: '#54656F',
+      textTertiary: '#8696A0',
+      border: '#E9EDEF',
+      placeholder: '#CCCCCC',
+      questionBg: '#F0F2F5',
+    }
+  },
+  midnightBlue: {
+    id: 'midnightBlue',
+    colors: {
+      primary: '#1E88E5',
+      success: '#1E88E5',
+      danger: '#FF6B6B',
+      background: '#0A1929',
+      cardBg: '#132F4C',
+      surface: '#132F4C',
+      modalBg: '#132F4C',
+      text: '#FFFFFF',
+      textSecondary: '#B0C4DE',
+      textTertiary: '#7B9BB5',
+      border: '#1E3A5F',
+      placeholder: '#2C4A6E',
+      questionBg: '#1E3A5F',
+    }
+  },
+  sunsetOrange: {
+    id: 'sunsetOrange',
+    colors: {
+      primary: '#FF5722',
+      success: '#FF5722',
+      danger: '#D84315',
+      background: '#FFF3E0',
+      cardBg: '#FFFFFF',
+      surface: '#FFE0B2',
+      modalBg: '#FFFFFF',
+      text: '#4E342E',
+      textSecondary: '#8D6E63',
+      textTertiary: '#A1887F',
+      border: '#FFCC80',
+      placeholder: '#FFCC80',
+      questionBg: '#FFF3E0',
+    }
+  },
+  purpleHaze: {
+    id: 'purpleHaze',
+    colors: {
+      primary: '#9C27B0',
+      success: '#9C27B0',
+      danger: '#E91E63',
+      background: '#F3E5F5',
+      cardBg: '#FFFFFF',
+      surface: '#E1BEE7',
+      modalBg: '#FFFFFF',
+      text: '#4A148C',
+      textSecondary: '#7B1FA2',
+      textTertiary: '#9C27B0',
+      border: '#CE93D8',
+      placeholder: '#CE93D8',
+      questionBg: '#F3E5F5',
+    }
+  },
+  oceanTeal: {
+    id: 'oceanTeal',
+    colors: {
+      primary: '#00897B',
+      success: '#00897B',
+      danger: '#D81B60',
+      background: '#E0F2F1',
+      cardBg: '#FFFFFF',
+      surface: '#B2DFDB',
+      modalBg: '#FFFFFF',
+      text: '#004D40',
+      textSecondary: '#00695C',
+      textTertiary: '#00897B',
+      border: '#80CBC4',
+      placeholder: '#80CBC4',
+      questionBg: '#E0F2F1',
+    }
+  },
+  cherryBlossom: {
+    id: 'cherryBlossom',
+    colors: {
+      primary: '#E91E63',
+      success: '#E91E63',
+      danger: '#C2185B',
+      background: '#FCE4EC',
+      cardBg: '#FFFFFF',
+      surface: '#F8BBD0',
+      modalBg: '#FFFFFF',
+      text: '#880E4F',
+      textSecondary: '#AD1457',
+      textTertiary: '#C2185B',
+      border: '#F48FB1',
+      placeholder: '#F48FB1',
+      questionBg: '#FCE4EC',
+    }
+  },
+};
 
 interface LocalQuestion {
   id: string;
@@ -23,6 +172,27 @@ export default function CreateFormScreen() {
   const [showQuestionBuilder, setShowQuestionBuilder] = useState(false);
   const [customOptions, setCustomOptions] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [currentTheme, setCurrentTheme] = useState('light');
+
+  // Get current theme colors
+  const theme = THEMES[currentTheme as keyof typeof THEMES];
+  const colors = theme.colors;
+
+  // Load theme from storage
+  const loadTheme = async () => {
+    try {
+      const savedTheme = await AsyncStorage.getItem('app_theme');
+      if (savedTheme && THEMES[savedTheme as keyof typeof THEMES]) {
+        setCurrentTheme(savedTheme);
+      }
+    } catch (error) {
+      console.error('Error loading theme:', error);
+    }
+  };
+
+  useEffect(() => {
+    loadTheme();
+  }, []);
 
   const questionTypes = [
     { value: 'short_answer', label: 'Short Answer', icon: 'create-outline' },
@@ -119,73 +289,73 @@ export default function CreateFormScreen() {
   };
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <View style={styles.header}>
+    <KeyboardAvoidingView style={[styles.container, { backgroundColor: colors.background }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <View style={[styles.header, { backgroundColor: colors.cardBg, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#000000" />
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Create New Form</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Create New Form</Text>
         <TouchableOpacity onPress={saveForm} style={styles.saveButton} disabled={isSubmitting}>
           {isSubmitting ? (
-            <ActivityIndicator size="small" color="#25D366" />
+            <ActivityIndicator size="small" color={colors.success} />
           ) : (
-            <Ionicons name="checkmark" size={24} color="#000000" />
+            <Ionicons name="checkmark" size={24} color={colors.text} />
           )}
         </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content}>
-        <View style={styles.section}>
+        <View style={[styles.section, { backgroundColor: colors.cardBg }]}>
           <TextInput
-            style={styles.titleInput}
+            style={[styles.titleInput, { color: colors.text }]}
             placeholder="Form Title"
-            placeholderTextColor="#999"
+            placeholderTextColor={colors.placeholder}
             value={title}
             onChangeText={setTitle}
           />
           <TextInput
-            style={styles.descriptionInput}
+            style={[styles.descriptionInput, { color: colors.textSecondary }]}
             placeholder="Form Description"
-            placeholderTextColor="#999"
+            placeholderTextColor={colors.placeholder}
             value={description}
             onChangeText={setDescription}
             multiline
           />
         </View>
 
-        <View style={styles.questionsSection}>
+        <View style={[styles.questionsSection, { backgroundColor: colors.cardBg }]}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Questions ({questions.length})</Text>
+            <Text style={[styles.sectionTitle, { color: colors.success }]}>Questions ({questions.length})</Text>
             <TouchableOpacity 
               style={styles.addButton}
               onPress={() => setShowQuestionBuilder(true)}
             >
-              <Ionicons name="add-circle" size={28} color="#25D366" />
+              <Ionicons name="add-circle" size={28} color={colors.success} />
             </TouchableOpacity>
           </View>
 
           {questions.map((q, index) => (
-            <View key={q.id} style={styles.questionCard}>
+            <View key={q.id} style={[styles.questionCard, { backgroundColor: colors.questionBg }]}>
               <View style={styles.questionHeader}>
-                <View style={styles.questionNumber}>
+                <View style={[styles.questionNumber, { backgroundColor: colors.success }]}>
                   <Text style={styles.questionNumberText}>{index + 1}</Text>
                 </View>
-                <Text style={styles.questionText}>{q.text}</Text>
+                <Text style={[styles.questionText, { color: colors.text }]}>{q.text}</Text>
                 <TouchableOpacity onPress={() => removeQuestion(q.id)}>
-                  <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+                  <Ionicons name="trash-outline" size={20} color={colors.danger} />
                 </TouchableOpacity>
               </View>
               <View style={styles.questionFooter}>
                 <View style={styles.typeBadge}>
-                  <Ionicons name={getTypeIcon(q.type)} size={14} color="#25D366" />
-                  <Text style={styles.typeText}>{q.type.replace('_', ' ')}</Text>
+                  <Ionicons name={getTypeIcon(q.type)} size={14} color={colors.success} />
+                  <Text style={[styles.typeText, { color: colors.textSecondary }]}>{q.type.replace('_', ' ')}</Text>
                 </View>
-                <Text style={styles.pointsText}>{q.points} pts</Text>
+                <Text style={[styles.pointsText, { color: colors.success }]}>{q.points} pts</Text>
               </View>
               {q.options && (
-                <View style={styles.optionsContainer}>
+                <View style={[styles.optionsContainer, { borderLeftColor: colors.border }]}>
                   {q.options.map((opt, idx) => (
-                    <Text key={idx} style={styles.optionText}>• {opt}</Text>
+                    <Text key={idx} style={[styles.optionText, { color: colors.textSecondary }]}>• {opt}</Text>
                   ))}
                 </View>
               )}
@@ -194,9 +364,9 @@ export default function CreateFormScreen() {
 
           {questions.length === 0 && (
             <View style={styles.emptyContainer}>
-              <Ionicons name="document-text-outline" size={60} color="#ccc" />
-              <Text style={styles.emptyText}>No questions yet</Text>
-              <Text style={styles.emptySubtext}>Tap + to add your first question</Text>
+              <Ionicons name="document-text-outline" size={60} color={colors.textTertiary} />
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No questions yet</Text>
+              <Text style={[styles.emptySubtext, { color: colors.textTertiary }]}>Tap + to add your first question</Text>
             </View>
           )}
         </View>
@@ -208,45 +378,47 @@ export default function CreateFormScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setShowQuestionBuilder(false)}
       >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
+        <View style={[styles.modalContainer, { backgroundColor: colors.modalBg }]}>
+          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
             <TouchableOpacity onPress={() => setShowQuestionBuilder(false)}>
-              <Ionicons name="close" size={24} color="#000000" />
+              <Ionicons name="close" size={24} color={colors.text} />
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>Add Question</Text>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Add Question</Text>
             <TouchableOpacity onPress={addQuestion}>
-              <Ionicons name="checkmark" size={24} color="#25D366" />
+              <Ionicons name="checkmark" size={24} color={colors.success} />
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.modalContent}>
             <TextInput
-              style={styles.questionInput}
+              style={[styles.questionInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
               placeholder="Enter your question..."
-              placeholderTextColor="#999"
+              placeholderTextColor={colors.placeholder}
               value={currentQuestion}
               onChangeText={setCurrentQuestion}
               multiline
             />
 
-            <Text style={styles.label}>Question Type</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>Question Type</Text>
             <View style={styles.typesGrid}>
               {questionTypes.map(type => (
                 <TouchableOpacity
                   key={type.value}
                   style={[
                     styles.typeCard,
-                    questionType === type.value && styles.typeCardActive
+                    { backgroundColor: colors.surface },
+                    questionType === type.value && [styles.typeCardActive, { backgroundColor: colors.success + '20', borderColor: colors.success }]
                   ]}
                   onPress={() => setQuestionType(type.value as Question['question_type'])}
                 >
                   <Ionicons 
                     name={type.icon} 
                     size={28} 
-                    color={questionType === type.value ? "#25D366" : "#666"} 
+                    color={questionType === type.value ? colors.success : colors.textSecondary} 
                   />
                   <Text style={[
                     styles.typeLabel,
+                    { color: questionType === type.value ? colors.success : colors.textSecondary },
                     questionType === type.value && styles.typeLabelActive
                   ]}>
                     {type.label}
@@ -257,22 +429,22 @@ export default function CreateFormScreen() {
 
             {(questionType === 'checkbox' || questionType === 'radio') && (
               <>
-                <Text style={styles.label}>Options (comma separated)</Text>
+                <Text style={[styles.label, { color: colors.textSecondary }]}>Options (comma separated)</Text>
                 <TextInput
-                  style={styles.optionsInput}
+                  style={[styles.optionsInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
                   placeholder="Option 1, Option 2, Option 3"
-                  placeholderTextColor="#999"
+                  placeholderTextColor={colors.placeholder}
                   value={customOptions}
                   onChangeText={setCustomOptions}
                 />
               </>
             )}
 
-            <Text style={styles.label}>Points</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>Points</Text>
             <TextInput
-              style={styles.pointsInput}
+              style={[styles.pointsInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
               placeholder="Points for this question"
-              placeholderTextColor="#999"
+              placeholderTextColor={colors.placeholder}
               value={questionPoints}
               onChangeText={setQuestionPoints}
               keyboardType="numeric"
@@ -287,10 +459,8 @@ export default function CreateFormScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   header: {
-    backgroundColor: '#FFFFFF',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -298,7 +468,6 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'ios' ? 50 : 76,
     paddingBottom: 12,
     borderBottomWidth: 0.5,
-    borderBottomColor: '#e0e0e0',
   },
   backButton: {
     padding: 4,
@@ -306,7 +475,6 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#000000',
   },
   saveButton: {
     padding: 4,
@@ -316,7 +484,6 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   section: {
-    backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
@@ -325,16 +492,13 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '600',
     paddingVertical: 8,
-    color: '#000',
   },
   descriptionInput: {
     fontSize: 15,
-    color: '#666',
     paddingVertical: 8,
     minHeight: 60,
   },
   questionsSection: {
-    backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
   },
@@ -347,13 +511,11 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#25D366',
   },
   addButton: {
     padding: 4,
   },
   questionCard: {
-    backgroundColor: '#f8f9fa',
     borderRadius: 10,
     padding: 12,
     marginBottom: 12,
@@ -368,7 +530,6 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: '#25D366',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -380,7 +541,6 @@ const styles = StyleSheet.create({
   questionText: {
     flex: 1,
     fontSize: 14,
-    color: '#000',
     fontWeight: '500',
   },
   questionFooter: {
@@ -396,12 +556,10 @@ const styles = StyleSheet.create({
   },
   typeText: {
     fontSize: 12,
-    color: '#666',
     textTransform: 'capitalize',
   },
   pointsText: {
     fontSize: 12,
-    color: '#25D366',
     fontWeight: '500',
   },
   optionsContainer: {
@@ -409,11 +567,9 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingLeft: 12,
     borderLeftWidth: 2,
-    borderLeftColor: '#e0e0e0',
   },
   optionText: {
     fontSize: 12,
-    color: '#666',
     marginBottom: 2,
   },
   emptyContainer: {
@@ -422,17 +578,14 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: '#999',
     marginTop: 12,
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#bbb',
     marginTop: 4,
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#fff',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -442,12 +595,10 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'ios' ? 50 : 20,
     paddingBottom: 12,
     borderBottomWidth: 0.5,
-    borderBottomColor: '#e0e0e0',
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#000',
   },
   modalContent: {
     flex: 1,
@@ -455,7 +606,6 @@ const styles = StyleSheet.create({
   },
   questionInput: {
     borderWidth: 1,
-    borderColor: '#e0e0e0',
     borderRadius: 12,
     padding: 12,
     fontSize: 16,
@@ -466,7 +616,6 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#333',
     marginBottom: 8,
     marginTop: 16,
   },
@@ -480,34 +629,27 @@ const styles = StyleSheet.create({
     minWidth: '30%',
     alignItems: 'center',
     padding: 12,
-    backgroundColor: '#f5f5f5',
     borderRadius: 10,
     gap: 6,
   },
   typeCardActive: {
-    backgroundColor: '#e8f5e9',
     borderWidth: 1,
-    borderColor: '#25D366',
   },
   typeLabel: {
     fontSize: 11,
-    color: '#666',
     textAlign: 'center',
   },
   typeLabelActive: {
-    color: '#25D366',
     fontWeight: '500',
   },
   optionsInput: {
     borderWidth: 1,
-    borderColor: '#e0e0e0',
     borderRadius: 8,
     padding: 12,
     fontSize: 15,
   },
   pointsInput: {
     borderWidth: 1,
-    borderColor: '#e0e0e0',
     borderRadius: 8,
     padding: 12,
     fontSize: 15,

@@ -13,10 +13,10 @@ const getBaseUrl = (): string => {
   if (__DEV__) {
     if (Platform.OS === 'android') {
       // Android emulator uses 10.0.2.2 to access host machine
-      return 'http://192.168.137.1:8000/api/';
+      return 'https://aptecProject.pythonanywhere.com/api/';
     }
     // iOS simulator or physical device - use your computer's IP
-    return 'http://192.168.137.1:8000/api/';
+    return 'https://aptecProject.pythonanywhere.com/api/';
   }
   // Production URL
   return API_CONFIG.BASE_URL.endsWith('/') ? API_CONFIG.BASE_URL : `${API_CONFIG.BASE_URL}/`;

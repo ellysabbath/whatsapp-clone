@@ -4,6 +4,115 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { PanGestureHandler, GestureHandlerRootView, State } from 'react-native-gesture-handler';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Theme definitions
+const THEMES = {
+  light: {
+    id: 'light',
+    colors: {
+      primary: '#075E54',
+      background: '#FFFFFF',
+      surface: '#F5F5F5',
+      text: '#000000',
+      textSecondary: '#666666',
+      border: '#E0E0E0',
+      headerBg: '#FFFFFF',
+      statusUnviewed: '#25D366',
+    }
+  },
+  dark: {
+    id: 'dark',
+    colors: {
+      primary: '#128C7E',
+      background: '#111B21',
+      surface: '#202C33',
+      text: '#E9EDEF',
+      textSecondary: '#AEBAC1',
+      border: '#2A3942',
+      headerBg: '#111B21',
+      statusUnviewed: '#25D366',
+    }
+  },
+  whatsappGreen: {
+    id: 'whatsappGreen',
+    colors: {
+      primary: '#25D366',
+      background: '#FFFFFF',
+      surface: '#F0F2F5',
+      text: '#111B21',
+      textSecondary: '#54656F',
+      border: '#E9EDEF',
+      headerBg: '#FFFFFF',
+      statusUnviewed: '#25D366',
+    }
+  },
+  midnightBlue: {
+    id: 'midnightBlue',
+    colors: {
+      primary: '#1E88E5',
+      background: '#0A1929',
+      surface: '#132F4C',
+      text: '#FFFFFF',
+      textSecondary: '#B0C4DE',
+      border: '#1E3A5F',
+      headerBg: '#0A1929',
+      statusUnviewed: '#1E88E5',
+    }
+  },
+  sunsetOrange: {
+    id: 'sunsetOrange',
+    colors: {
+      primary: '#FF5722',
+      background: '#FFF3E0',
+      surface: '#FFE0B2',
+      text: '#4E342E',
+      textSecondary: '#8D6E63',
+      border: '#FFCC80',
+      headerBg: '#FFF3E0',
+      statusUnviewed: '#FF5722',
+    }
+  },
+  purpleHaze: {
+    id: 'purpleHaze',
+    colors: {
+      primary: '#9C27B0',
+      background: '#F3E5F5',
+      surface: '#E1BEE7',
+      text: '#4A148C',
+      textSecondary: '#7B1FA2',
+      border: '#CE93D8',
+      headerBg: '#F3E5F5',
+      statusUnviewed: '#9C27B0',
+    }
+  },
+  oceanTeal: {
+    id: 'oceanTeal',
+    colors: {
+      primary: '#00897B',
+      background: '#E0F2F1',
+      surface: '#B2DFDB',
+      text: '#004D40',
+      textSecondary: '#00695C',
+      border: '#80CBC4',
+      headerBg: '#E0F2F1',
+      statusUnviewed: '#00897B',
+    }
+  },
+  cherryBlossom: {
+    id: 'cherryBlossom',
+    colors: {
+      primary: '#E91E63',
+      background: '#FCE4EC',
+      surface: '#F8BBD0',
+      text: '#880E4F',
+      textSecondary: '#AD1457',
+      border: '#F48FB1',
+      headerBg: '#FCE4EC',
+      statusUnviewed: '#E91E63',
+    }
+  },
+};
 
 // Mock data for status updates
 const myStatuses = [
@@ -119,6 +228,27 @@ export default function UpdatesScreen() {
   const [showChannelModal, setShowChannelModal] = useState(false);
   const [selectedChannel, setSelectedChannel] = useState<any>(null);
   const [myStatusVisible, setMyStatusVisible] = useState(false);
+  const [currentTheme, setCurrentTheme] = useState('light');
+
+  // Get current theme colors
+  const theme = THEMES[currentTheme as keyof typeof THEMES];
+  const colors = theme.colors;
+
+  // Load theme from storage
+  const loadTheme = async () => {
+    try {
+      const savedTheme = await AsyncStorage.getItem('app_theme');
+      if (savedTheme && THEMES[savedTheme as keyof typeof THEMES]) {
+        setCurrentTheme(savedTheme);
+      }
+    } catch (error) {
+      console.error('Error loading theme:', error);
+    }
+  };
+
+  useEffect(() => {
+    loadTheme();
+  }, []);
 
   const handleMyStatusPress = () => {
     Alert.alert(
@@ -161,7 +291,7 @@ export default function UpdatesScreen() {
     setActiveTab(tab);
     switch(tab) {
       case 'chats':
-        router.push('/dashboard/chats');
+        router.push('/chat/${chat.chat_id}');
         break;
       case 'updates':
         break;
@@ -199,34 +329,34 @@ export default function UpdatesScreen() {
   };
 
   const renderStatusItem = ({ item }: any) => (
-    <TouchableOpacity style={styles.statusItem} onPress={() => handleStatusPress(item)}>
-      <View style={[styles.statusAvatarContainer, !item.viewed && styles.statusUnviewed]}>
+    <TouchableOpacity style={[styles.statusItem, { borderBottomColor: colors.border }]} onPress={() => handleStatusPress(item)}>
+      <View style={[styles.statusAvatarContainer, !item.viewed && { borderColor: colors.statusUnviewed }]}>
         <Image source={{ uri: item.avatar }} style={styles.statusAvatar} />
       </View>
       <View style={styles.statusInfo}>
-        <Text style={[styles.statusName, !item.viewed && styles.statusNameUnviewed]}>{item.name}</Text>
-        <Text style={styles.statusTime}>{item.timestamp}</Text>
+        <Text style={[styles.statusName, !item.viewed && styles.statusNameUnviewed, { color: colors.text }]}>{item.name}</Text>
+        <Text style={[styles.statusTime, { color: colors.textSecondary }]}>{item.timestamp}</Text>
       </View>
     </TouchableOpacity>
   );
 
   const renderChannelItem = ({ item }: any) => (
-    <TouchableOpacity style={styles.channelItem} onPress={() => handleChannelPress(item)}>
+    <TouchableOpacity style={[styles.channelItem, { borderBottomColor: colors.border }]} onPress={() => handleChannelPress(item)}>
       <View style={styles.channelAvatarContainer}>
         <Image source={{ uri: item.avatar }} style={styles.channelAvatar} />
         {item.verified && (
-          <View style={styles.verifiedBadge}>
+          <View style={[styles.verifiedBadge, { backgroundColor: colors.primary }]}>
             <Ionicons name="checkmark-circle" size={14} color="#fff" />
           </View>
         )}
       </View>
       <View style={styles.channelInfo}>
         <View style={styles.channelHeader}>
-          <Text style={styles.channelName}>{item.name}</Text>
-          <Text style={styles.channelTime}>{item.timestamp}</Text>
+          <Text style={[styles.channelName, { color: colors.text }]}>{item.name}</Text>
+          <Text style={[styles.channelTime, { color: colors.textSecondary }]}>{item.timestamp}</Text>
         </View>
-        <Text style={styles.channelLatest}>{item.latest}</Text>
-        <Text style={styles.channelSubscribers}>{item.subscribers} subscribers</Text>
+        <Text style={[styles.channelLatest, { color: colors.textSecondary }]}>{item.latest}</Text>
+        <Text style={[styles.channelSubscribers, { color: colors.textSecondary }]}>{item.subscribers} subscribers</Text>
       </View>
     </TouchableOpacity>
   );
@@ -253,53 +383,53 @@ export default function UpdatesScreen() {
         activeOffsetX={[-10, 10]}
         failOffsetY={[-5, 5]}
       >
-        <SafeAreaView style={styles.safeArea}>
-          <View style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor="#075E54" />
+        <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.primary }]}>
+          <View style={[styles.container, { backgroundColor: colors.background }]}>
+            <StatusBar barStyle={currentTheme === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={colors.primary} />
             
             {/* Header with back arrow */}
-            <View style={styles.header}>
+            <View style={[styles.header, { backgroundColor: colors.headerBg, borderBottomColor: colors.border }]}>
               <View style={styles.headerLeft}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                  <Ionicons name="arrow-back" size={24} color="#000000" />
+                  <Ionicons name="arrow-back" size={24} color={colors.text} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Updates</Text>
+                <Text style={[styles.headerTitle, { color: colors.text }]}>Updates</Text>
               </View>
               <View style={styles.headerIcons}>
                 <TouchableOpacity style={styles.headerIcon} onPress={() => Alert.alert('Search', 'Search updates')}>
-                  <Ionicons name="search" size={22} color="#000000" />
+                  <Ionicons name="search" size={22} color={colors.text} />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.headerIcon} onPress={() => Alert.alert('Menu', 'Updates menu')}>
-                  <Ionicons name="ellipsis-vertical" size={20} color="#000000" />
+                  <Ionicons name="ellipsis-vertical" size={20} color={colors.text} />
                 </TouchableOpacity>
               </View>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
               {/* My Status Section */}
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>My status</Text>
+              <View style={[styles.section, { backgroundColor: colors.background }]}>
+                <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>My status</Text>
                 <TouchableOpacity style={styles.myStatusCard} onPress={handleMyStatusPress}>
                   <View style={styles.myStatusAvatarContainer}>
                     <Image 
                       source={{ uri: 'https://randomuser.me/api/portraits/men/1.jpg' }} 
                       style={styles.myStatusAvatar}
                     />
-                    <View style={styles.addStatusIcon}>
+                    <View style={[styles.addStatusIcon, { backgroundColor: colors.statusUnviewed }]}>
                       <Ionicons name="add" size={16} color="#fff" />
                     </View>
                   </View>
                   <View style={styles.myStatusText}>
-                    <Text style={styles.myStatusTitle}>My status</Text>
-                    <Text style={styles.myStatusSubtitle}>Tap to add status update</Text>
+                    <Text style={[styles.myStatusTitle, { color: colors.text }]}>My status</Text>
+                    <Text style={[styles.myStatusSubtitle, { color: colors.textSecondary }]}>Tap to add status update</Text>
                   </View>
                 </TouchableOpacity>
               </View>
 
               {/* Recent Updates Section */}
               {recentStatuses.length > 0 && (
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Recent updates</Text>
+                <View style={[styles.section, { backgroundColor: colors.background }]}>
+                  <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Recent updates</Text>
                   <FlatList
                     data={recentStatuses}
                     keyExtractor={(item) => item.id}
@@ -311,8 +441,8 @@ export default function UpdatesScreen() {
 
               {/* Viewed Updates Section */}
               {viewedStatuses.length > 0 && (
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Viewed updates</Text>
+                <View style={[styles.section, { backgroundColor: colors.background }]}>
+                  <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Viewed updates</Text>
                   <FlatList
                     data={viewedStatuses}
                     keyExtractor={(item) => item.id}
@@ -323,11 +453,11 @@ export default function UpdatesScreen() {
               )}
 
               {/* Channels Section */}
-              <View style={styles.section}>
+              <View style={[styles.section, { backgroundColor: colors.background }]}>
                 <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Channels</Text>
+                  <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Channels</Text>
                   <TouchableOpacity onPress={() => Alert.alert('Find Channels', 'Discover channels')}>
-                    <Text style={styles.findChannelsText}>Find channels</Text>
+                    <Text style={[styles.findChannelsText, { color: colors.primary }]}>Find channels</Text>
                   </TouchableOpacity>
                 </View>
                 
@@ -339,14 +469,14 @@ export default function UpdatesScreen() {
                 />
                 
                 <TouchableOpacity style={styles.exploreButton} onPress={() => Alert.alert('Explore', 'Explore more channels')}>
-                  <Text style={styles.exploreButtonText}>Explore more</Text>
+                  <Text style={[styles.exploreButtonText, { color: colors.primary }]}>Explore more</Text>
                 </TouchableOpacity>
               </View>
 
               {/* Privacy Note */}
               <View style={styles.privacyNote}>
-                <Ionicons name="lock-closed-outline" size={14} color="#999" />
-                <Text style={styles.privacyText}>
+                <Ionicons name="lock-closed-outline" size={14} color={colors.textSecondary} />
+                <Text style={[styles.privacyText, { color: colors.textSecondary }]}>
                   Your status updates are end-to-end encrypted
                 </Text>
               </View>
@@ -413,7 +543,7 @@ export default function UpdatesScreen() {
                         style={[
                           styles.statusProgressBar,
                           idx === currentStatusIndex && styles.statusProgressBarActive,
-                          idx < currentStatusIndex && styles.statusProgressBarCompleted
+                          idx < currentStatusIndex && [styles.statusProgressBarCompleted, { backgroundColor: colors.primary }]
                         ]} 
                       />
                     ))}
@@ -430,13 +560,13 @@ export default function UpdatesScreen() {
               onRequestClose={() => setShowChannelModal(false)}
             >
               {selectedChannel && (
-                <View style={styles.channelModalContainer}>
-                  <View style={styles.channelModalHeader}>
+                <View style={[styles.channelModalContainer, { backgroundColor: colors.background }]}>
+                  <View style={[styles.channelModalHeader, { borderBottomColor: colors.border }]}>
                     <TouchableOpacity onPress={() => setShowChannelModal(false)}>
-                      <Ionicons name="arrow-back" size={24} color="#000000" />
+                      <Ionicons name="arrow-back" size={24} color={colors.text} />
                     </TouchableOpacity>
                     <TouchableOpacity>
-                      <Ionicons name="ellipsis-vertical" size={20} color="#000000" />
+                      <Ionicons name="ellipsis-vertical" size={20} color={colors.text} />
                     </TouchableOpacity>
                   </View>
 
@@ -445,22 +575,22 @@ export default function UpdatesScreen() {
                       <Image source={{ uri: selectedChannel.avatar }} style={styles.channelModalAvatar} />
                       {selectedChannel.verified && (
                         <View style={styles.channelModalVerified}>
-                          <Ionicons name="checkmark-circle" size={20} color="#25D366" />
+                          <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
                         </View>
                       )}
                     </View>
                     
-                    <Text style={styles.channelModalName}>{selectedChannel.name}</Text>
-                    <Text style={styles.channelModalSubscribers}>{selectedChannel.subscribers} subscribers</Text>
+                    <Text style={[styles.channelModalName, { color: colors.text }]}>{selectedChannel.name}</Text>
+                    <Text style={[styles.channelModalSubscribers, { color: colors.textSecondary }]}>{selectedChannel.subscribers} subscribers</Text>
                     
-                    <TouchableOpacity style={styles.followButton}>
+                    <TouchableOpacity style={[styles.followButton, { backgroundColor: colors.primary }]}>
                       <Text style={styles.followButtonText}>Follow</Text>
                     </TouchableOpacity>
 
-                    <View style={styles.channelLatestUpdate}>
-                      <Text style={styles.channelLatestTitle}>Latest update</Text>
-                      <Text style={styles.channelLatestText}>{selectedChannel.latest}</Text>
-                      <Text style={styles.channelLatestTime}>{selectedChannel.timestamp}</Text>
+                    <View style={[styles.channelLatestUpdate, { backgroundColor: colors.surface }]}>
+                      <Text style={[styles.channelLatestTitle, { color: colors.textSecondary }]}>Latest update</Text>
+                      <Text style={[styles.channelLatestText, { color: colors.text }]}>{selectedChannel.latest}</Text>
+                      <Text style={[styles.channelLatestTime, { color: colors.textSecondary }]}>{selectedChannel.timestamp}</Text>
                     </View>
                   </View>
                 </View>
@@ -474,14 +604,14 @@ export default function UpdatesScreen() {
               animationType="slide"
               onRequestClose={() => setMyStatusVisible(false)}
             >
-              <View style={styles.myStatusModalContainer}>
-                <View style={styles.myStatusModalHeader}>
+              <View style={[styles.myStatusModalContainer, { backgroundColor: colors.background }]}>
+                <View style={[styles.myStatusModalHeader, { borderBottomColor: colors.border }]}>
                   <TouchableOpacity onPress={() => setMyStatusVisible(false)}>
-                    <Ionicons name="arrow-back" size={24} color="#000000" />
+                    <Ionicons name="arrow-back" size={24} color={colors.text} />
                   </TouchableOpacity>
-                  <Text style={styles.myStatusModalTitle}>My statuses</Text>
+                  <Text style={[styles.myStatusModalTitle, { color: colors.text }]}>My statuses</Text>
                   <TouchableOpacity>
-                    <Ionicons name="ellipsis-vertical" size={20} color="#000000" />
+                    <Ionicons name="ellipsis-vertical" size={20} color={colors.text} />
                   </TouchableOpacity>
                 </View>
 
@@ -493,15 +623,15 @@ export default function UpdatesScreen() {
                   contentContainerStyle={styles.myStatusGrid}
                 />
 
-                <TouchableOpacity style={styles.addStatusButton} onPress={() => Alert.alert('Add Status', 'Add new status')}>
+                <TouchableOpacity style={[styles.addStatusButton, { backgroundColor: colors.primary }]} onPress={() => Alert.alert('Add Status', 'Add new status')}>
                   <Ionicons name="camera" size={24} color="#fff" />
                   <Text style={styles.addStatusButtonText}>Add to my status</Text>
                 </TouchableOpacity>
               </View>
             </Modal>
 
-            {/* Bottom Tab Navigation - All icons black */}
-            <View style={styles.bottomTab}>
+            {/* Bottom Tab Navigation */}
+            <View style={[styles.bottomTab, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
               <TouchableOpacity
                 style={styles.tabItem}
                 onPress={() => handleTabPress('chats')}
@@ -509,9 +639,9 @@ export default function UpdatesScreen() {
                 <Ionicons
                   name="chatbubbles-outline"
                   size={24}
-                  color="#000000"
+                  color={colors.text}
                 />
-                <Text style={styles.tabLabel}>Chats</Text>
+                <Text style={[styles.tabLabel, { color: colors.textSecondary }]}>Chats</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -519,11 +649,11 @@ export default function UpdatesScreen() {
                 onPress={() => handleTabPress('updates')}
               >
                 <Ionicons
-                  name="time-outline"
+                  name="time"
                   size={24}
-                  color="#000000"
+                  color={colors.primary}
                 />
-                <Text style={styles.tabLabel}>Updates</Text>
+                <Text style={[styles.tabLabel, { color: colors.primary }]}>Updates</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -533,9 +663,9 @@ export default function UpdatesScreen() {
                 <Ionicons
                   name="person-outline"
                   size={24}
-                  color="#000000"
+                  color={colors.text}
                 />
-                <Text style={styles.tabLabel}>Profile</Text>
+                <Text style={[styles.tabLabel, { color: colors.textSecondary }]}>Profile</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -545,9 +675,9 @@ export default function UpdatesScreen() {
                 <Ionicons
                   name="megaphone-outline"
                   size={24}
-                  color="#000000"
+                  color={colors.text}
                 />
-                <Text style={styles.tabLabel}>Broadcast</Text>
+                <Text style={[styles.tabLabel, { color: colors.textSecondary }]}>Broadcast</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -563,14 +693,11 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
-    backgroundColor: '#075E54',
   },
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   header: {
-    backgroundColor: '#ffffff',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -579,7 +706,6 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     minHeight: Platform.OS === 'ios' ? 70 : 86,
     borderBottomWidth: 0.5,
-    borderBottomColor: '#e0e0e0',
   },
   headerLeft: {
     flexDirection: 'row',
@@ -592,7 +718,6 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#000000',
   },
   headerIcons: {
     flexDirection: 'row',
@@ -606,14 +731,12 @@ const styles = StyleSheet.create({
     marginBottom: Platform.OS === 'ios' ? 80 : 100,
   },
   section: {
-    backgroundColor: '#fff',
     marginTop: 8,
     paddingVertical: 8,
   },
   sectionTitle: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#666',
     marginLeft: 16,
     marginTop: 8,
     marginBottom: 8,
@@ -627,7 +750,6 @@ const styles = StyleSheet.create({
   },
   findChannelsText: {
     fontSize: 13,
-    color: '#25D366',
     fontWeight: '500',
   },
   myStatusCard: {
@@ -649,7 +771,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     right: 0,
-    backgroundColor: '#25D366',
     width: 20,
     height: 20,
     borderRadius: 10,
@@ -664,27 +785,23 @@ const styles = StyleSheet.create({
   myStatusTitle: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#000',
     marginBottom: 2,
   },
   myStatusSubtitle: {
     fontSize: 13,
-    color: '#666',
   },
   statusItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 10,
+    borderBottomWidth: 0.5,
   },
   statusAvatarContainer: {
     marginRight: 12,
     padding: 2,
-  },
-  statusUnviewed: {
     borderRadius: 30,
     borderWidth: 2,
-    borderColor: '#25D366',
   },
   statusAvatar: {
     width: 52,
@@ -697,22 +814,20 @@ const styles = StyleSheet.create({
   statusName: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#000',
     marginBottom: 2,
   },
   statusNameUnviewed: {
     fontWeight: '700',
-    color: '#000',
   },
   statusTime: {
     fontSize: 12,
-    color: '#999',
   },
   channelItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
+    borderBottomWidth: 0.5,
   },
   channelAvatarContainer: {
     position: 'relative',
@@ -727,7 +842,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     right: 0,
-    backgroundColor: '#25D366',
     borderRadius: 8,
     padding: 2,
   },
@@ -743,20 +857,16 @@ const styles = StyleSheet.create({
   channelName: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#000',
   },
   channelTime: {
     fontSize: 11,
-    color: '#999',
   },
   channelLatest: {
     fontSize: 13,
-    color: '#666',
     marginBottom: 2,
   },
   channelSubscribers: {
     fontSize: 11,
-    color: '#999',
   },
   exploreButton: {
     marginHorizontal: 16,
@@ -768,7 +878,6 @@ const styles = StyleSheet.create({
   },
   exploreButtonText: {
     fontSize: 14,
-    color: '#075E54',
     fontWeight: '500',
   },
   privacyNote: {
@@ -780,7 +889,6 @@ const styles = StyleSheet.create({
   },
   privacyText: {
     fontSize: 11,
-    color: '#999',
   },
   statusModalContainer: {
     flex: 1,
@@ -869,7 +977,6 @@ const styles = StyleSheet.create({
   },
   channelModalContainer: {
     flex: 1,
-    backgroundColor: '#fff',
   },
   channelModalHeader: {
     flexDirection: 'row',
@@ -879,7 +986,6 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'ios' ? 50 : StatusBar.currentHeight ? StatusBar.currentHeight + 15 : 20,
     paddingBottom: 16,
     borderBottomWidth: 0.5,
-    borderBottomColor: '#e0e0e0',
   },
   channelModalContent: {
     alignItems: 'center',
@@ -904,16 +1010,13 @@ const styles = StyleSheet.create({
   channelModalName: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#000',
     marginBottom: 4,
   },
   channelModalSubscribers: {
     fontSize: 14,
-    color: '#666',
     marginBottom: 20,
   },
   followButton: {
-    backgroundColor: '#25D366',
     paddingHorizontal: 40,
     paddingVertical: 12,
     borderRadius: 25,
@@ -926,29 +1029,24 @@ const styles = StyleSheet.create({
   },
   channelLatestUpdate: {
     width: '100%',
-    backgroundColor: '#f5f5f5',
     padding: 16,
     borderRadius: 12,
   },
   channelLatestTitle: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#666',
     marginBottom: 8,
     textTransform: 'uppercase',
   },
   channelLatestText: {
     fontSize: 16,
-    color: '#000',
     marginBottom: 4,
   },
   channelLatestTime: {
     fontSize: 12,
-    color: '#999',
   },
   myStatusModalContainer: {
     flex: 1,
-    backgroundColor: '#fff',
   },
   myStatusModalHeader: {
     flexDirection: 'row',
@@ -958,12 +1056,10 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'ios' ? 50 : StatusBar.currentHeight ? StatusBar.currentHeight + 15 : 40,
     paddingBottom: 16,
     borderBottomWidth: 0.5,
-    borderBottomColor: '#e0e0e0',
   },
   myStatusModalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#000',
   },
   myStatusGrid: {
     padding: 4,
@@ -1009,7 +1105,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 20,
     right: 20,
-    backgroundColor: '#25D366',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
@@ -1029,9 +1124,7 @@ const styles = StyleSheet.create({
   },
   bottomTab: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
     borderTopWidth: 0.5,
-    borderTopColor: '#e0e0e0',
     paddingVertical: 8,
     paddingBottom: Platform.OS === 'ios' ? 28 : 76,
     position: 'absolute',
@@ -1047,6 +1140,5 @@ const styles = StyleSheet.create({
   },
   tabLabel: {
     fontSize: 12,
-    color: '#000000',
   },
 });
