@@ -16,6 +16,7 @@ import {
   Animated,
   Platform,
   StatusBar,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -375,15 +376,32 @@ export default function AdminDashboard() {
     setModalVisible(true);
   };
 
+  // ==================== NAVIGATION HANDLERS ====================
+  const navigateToManageChats = () => {
+    closeMenu();
+    router.push('/dashboard/manage');
+  };
+
+  const navigateToManageForms = () => {
+    closeMenu();
+    router.push('/dashboard/forms/manage');
+  };
+
+  const navigateToManageGroups = () => {
+    closeMenu();
+    router.push('/dashboard/groups/manage');
+  };
+
+  const navigateToManageLibrary = () => {
+    closeMenu();
+    router.push('/dashboard/library/manage');
+  };
+
   // ==================== MENU ====================
   const toggleMenu = () => setMenuVisible(!menuVisible);
   const closeMenu = () => setMenuVisible(false);
 
-  const handleMenuAction = (screen: string) => {
-    closeMenu();
-    router.push(`/${screen}/manage`);
-  };
-
+  // Animate menu on visibility change
   useEffect(() => {
     Animated.parallel([
       Animated.timing(slideAnim, { toValue: menuVisible ? 0 : -300, duration: 250, useNativeDriver: true }),
@@ -419,18 +437,45 @@ export default function AdminDashboard() {
         </TouchableOpacity>
       </View>
 
-      {/* Dropdown Menu */}
-      <Modal transparent visible={menuVisible} onRequestClose={closeMenu}>
+      {/* Dropdown Menu with Working Navigation */}
+      <Modal transparent visible={menuVisible} onRequestClose={closeMenu} animationType="none">
         <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={closeMenu}>
           <Animated.View style={[styles.dropdown, { backgroundColor: colors.surface, transform: [{ translateY: slideAnim }], opacity: fadeAnim }]}>
+            
+            {/* Manage Section */}
             <Text style={[styles.menuHeader, { color: colors.textSecondary }]}>MANAGE</Text>
-            {['chats', 'forms', 'groups', 'library'].map(item => (
-              <TouchableOpacity key={item} style={styles.menuItem} onPress={() => handleMenuAction(item)}>
-                <Ionicons name={item === 'chats' ? 'chatbubbles-outline' : item === 'forms' ? 'document-text-outline' : item === 'groups' ? 'people-outline' : 'library-outline'} size={22} color={colors.text} />
-                <Text style={[styles.menuText, { color: colors.text }]}>Manage {item.charAt(0).toUpperCase() + item.slice(1)}</Text>
-              </TouchableOpacity>
-            ))}
+            
+            {/* Manage Chats */}
+            <TouchableOpacity style={styles.menuItem} onPress={navigateToManageChats}>
+              <Ionicons name="chatbubbles-outline" size={22} color={colors.text} />
+              <Text style={[styles.menuText, { color: colors.text }]}>Manage Chats</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} style={{ marginLeft: 'auto' }} />
+            </TouchableOpacity>
+            
+            {/* Manage Forms */}
+            <TouchableOpacity style={styles.menuItem} onPress={navigateToManageForms}>
+              <Ionicons name="document-text-outline" size={22} color={colors.text} />
+              <Text style={[styles.menuText, { color: colors.text }]}>Manage Forms</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} style={{ marginLeft: 'auto' }} />
+            </TouchableOpacity>
+            
+            {/* Manage Groups */}
+            <TouchableOpacity style={styles.menuItem} onPress={navigateToManageGroups}>
+              <Ionicons name="people-outline" size={22} color={colors.text} />
+              <Text style={[styles.menuText, { color: colors.text }]}>Manage Groups</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} style={{ marginLeft: 'auto' }} />
+            </TouchableOpacity>
+            
+            {/* Manage Library */}
+            <TouchableOpacity style={styles.menuItem} onPress={navigateToManageLibrary}>
+              <Ionicons name="library-outline" size={22} color={colors.text} />
+              <Text style={[styles.menuText, { color: colors.text }]}>Manage Library</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} style={{ marginLeft: 'auto' }} />
+            </TouchableOpacity>
+            
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            
+            {/* Themes Section */}
             <Text style={[styles.menuHeader, { color: colors.textSecondary }]}>THEMES</Text>
             {Object.entries(THEMES).map(([key, t]) => (
               <TouchableOpacity key={key} style={styles.menuItem} onPress={() => saveTheme(key)}>
@@ -442,6 +487,42 @@ export default function AdminDashboard() {
           </Animated.View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Quick Navigation Cards - Dashboard Tab */}
+      {activeTab === 'dashboard' && (
+        <View style={styles.quickNavSection}>
+          <Text style={[styles.quickNavTitle, { color: colors.text }]}>Quick Navigation</Text>
+          <View style={styles.quickNavGrid}>
+            <TouchableOpacity style={[styles.quickNavCard, { backgroundColor: colors.surface }]} onPress={navigateToManageChats}>
+              <View style={[styles.quickNavIcon, { backgroundColor: colors.info + '20' }]}>
+                <Ionicons name="chatbubbles" size={28} color={colors.info} />
+              </View>
+              <Text style={[styles.quickNavLabel, { color: colors.text }]}>Chats</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.quickNavCard, { backgroundColor: colors.surface }]} onPress={navigateToManageForms}>
+              <View style={[styles.quickNavIcon, { backgroundColor: colors.success + '20' }]}>
+                <Ionicons name="document-text" size={28} color={colors.success} />
+              </View>
+              <Text style={[styles.quickNavLabel, { color: colors.text }]}>Forms</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.quickNavCard, { backgroundColor: colors.surface }]} onPress={navigateToManageGroups}>
+              <View style={[styles.quickNavIcon, { backgroundColor: colors.warning + '20' }]}>
+                <Ionicons name="people" size={28} color={colors.warning} />
+              </View>
+              <Text style={[styles.quickNavLabel, { color: colors.text }]}>Groups</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.quickNavCard, { backgroundColor: colors.surface }]} onPress={navigateToManageLibrary}>
+              <View style={[styles.quickNavIcon, { backgroundColor: colors.primary + '20' }]}>
+                <Ionicons name="library" size={28} color={colors.primary} />
+              </View>
+              <Text style={[styles.quickNavLabel, { color: colors.text }]}>Library</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       {/* Content */}
       <ScrollView
@@ -763,25 +844,80 @@ const styles = StyleSheet.create({
   
   // Header
   header: {
-     flexDirection: 'row',
-      alignItems: 'center',
-       justifyContent: 'space-between',
-        paddingHorizontal: 16,
-         paddingTop: Platform.OS === 'ios' ? 50 : 66,
-          paddingBottom: 12, borderBottomWidth: 1 
-    
-    },
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'ios' ? 50 : 66,
+    paddingBottom: 12,
+    borderBottomWidth: 1 
+  },
   headerBtn: { padding: 4 },
   headerCenter: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   headerTitle: { fontSize: 18, fontWeight: '600' },
   
+  // Quick Navigation Section
+  quickNavSection: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  quickNavTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  quickNavGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  quickNavCard: {
+    width: (SCREEN_WIDTH - 44) / 4,
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  quickNavIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  quickNavLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  
   // Dropdown
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
-  dropdown: { position: 'absolute', top: Platform.OS === 'ios' ? 100 : 66, right: 12, borderRadius: 12, paddingVertical: 8, minWidth: 220, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 5, zIndex: 1000 },
+  dropdown: { 
+    position: 'absolute', 
+    top: Platform.OS === 'ios' ? 110 : 76, 
+    right: 12, 
+    borderRadius: 12, 
+    paddingVertical: 8, 
+    minWidth: 240, 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 2 }, 
+    shadowOpacity: 0.25, 
+    shadowRadius: 8, 
+    elevation: 5, 
+    zIndex: 1000 
+  },
   menuHeader: { fontSize: 12, fontWeight: '600', paddingHorizontal: 16, paddingVertical: 8, letterSpacing: 0.5 },
-  menuItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, gap: 12 },
-  menuText: { fontSize: 15 },
-  divider: { height: 1, marginVertical: 4 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 12 },
+  menuText: { fontSize: 15, flex: 1 },
+  divider: { height: 1, marginVertical: 8 },
   
   // Dashboard
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', padding: 12, justifyContent: 'space-between' },
@@ -826,7 +962,7 @@ const styles = StyleSheet.create({
   cardDate: { fontSize: 11, marginLeft: 'auto' },
   
   // Bottom Tabs
-  bottomTabs: { flexDirection: 'row', borderTopWidth: 1, paddingVertical: 8, paddingBottom: Platform.OS === 'ios' ? 28 : 46 },
+  bottomTabs: { flexDirection: 'row', borderTopWidth: 1, paddingVertical: 8, paddingBottom: Platform.OS === 'ios' ? 28 : 16 },
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderTopWidth: 2, borderTopColor: 'transparent', gap: 4 },
   tabLabel: { fontSize: 11 },
   
@@ -858,3 +994,7 @@ const styles = StyleSheet.create({
   toast: { position: 'absolute', bottom: 100, left: 20, right: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, borderRadius: 8, gap: 8, zIndex: 1000 },
   toastText: { color: '#fff', fontSize: 14, fontWeight: '600' },
 });
+
+// Get screen width for responsive design
+const SCREEN_WIDTH = Dimensions.get('window').width;
+

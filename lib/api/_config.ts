@@ -92,6 +92,54 @@ export const API_CONFIG = {
     FORM_SHARE: '/forms/:formId/share/',
     FORM_JOIN: '/forms/join/',
     FORM_STATS: '/forms/:formId/stats/',
+
+
+
+
+    CONTROL_CONTACTS: '/control/contacts/',
+    CONTROL_CONTACT_DETAIL: '/control/contacts/:id/',
+    CONTROL_CONTACT_TOGGLE_BLOCK: '/control/contacts/:id/toggle_block/',
+    CONTROL_CONTACT_TOGGLE_FAVORITE: '/control/contacts/:id/toggle_favorite/',
+    
+    CONTROL_CHATS: '/control/chats/',
+    CONTROL_CHAT_DETAIL: '/control/chats/:id/',
+    CONTROL_CHAT_ADD_PARTICIPANT: '/control/chats/:id/add_participant/',
+    CONTROL_CHAT_REMOVE_PARTICIPANT: '/control/chats/:id/remove_participant/',
+    
+    CONTROL_MESSAGES: '/control/messages/',
+    CONTROL_MESSAGE_DETAIL: '/control/messages/:id/',
+    CONTROL_MESSAGE_ADD_REACTION: '/control/messages/:id/add_reaction/',
+    CONTROL_MESSAGE_REMOVE_REACTION: '/control/messages/:id/remove_reaction/',
+    CONTROL_MESSAGE_STAR: '/control/messages/:id/star/',
+    CONTROL_MESSAGE_UNSTAR: '/control/messages/:id/unstar/',
+    
+    CONTROL_MESSAGE_STATUSES: '/control/message-statuses/',
+    CONTROL_MARK_READ: '/control/message-statuses/mark_as_read/',
+    
+    CONTROL_TYPING_STATUS: '/control/typing-statuses/update_typing/',
+    
+    CONTROL_CALLS: '/control/calls/',
+    CONTROL_CALL_UPDATE_STATUS: '/control/calls/:id/update_status/',
+    
+    CONTROL_GROUPS: '/control/groups/',
+    CONTROL_GROUP_CREATE_INVITE: '/control/groups/:id/create_invite/',
+    
+    CONTROL_GROUP_INVITES: '/control/group-invites/',
+    CONTROL_USE_INVITE: '/control/group-invites/:id/use_invite/',
+    
+    CONTROL_STARRED_MESSAGES: '/control/starred-messages/',
+    
+    CONTROL_ARCHIVED_CHATS: '/control/archived-chats/',
+    CONTROL_UNARCHIVE: '/control/archived-chats/unarchive/',
+    
+    CONTROL_BROADCAST_LISTS: '/control/broadcast-lists/',
+    CONTROL_SEND_BROADCAST: '/control/broadcast-lists/:id/send_message/',
+    
+    CONTROL_BROADCAST_MESSAGES: '/control/broadcast-messages/',
+    
+    CONTROL_SEARCH_USERS: '/control/users/?search=',
+    CONTROL_SEARCH_CHATS: '/control/chats/?search=',
+    CONTROL_SEARCH_MESSAGES: '/control/messages/?search=',
   }
 };
 

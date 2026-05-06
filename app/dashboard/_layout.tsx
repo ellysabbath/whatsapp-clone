@@ -22,6 +22,7 @@ export default function Dashboard() {
       <Stack.Screen name="garages/index" />
       <Stack.Screen name="chat/index" />
       <Stack.Screen name="admin/index" />
+      <Stack.Screen name="manage/index" />
       
       <Stack.Screen name="theme/index" />
 
