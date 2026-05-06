@@ -171,6 +171,7 @@ export default function ChatDetailScreen() {
   const isMounted = useRef(true);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const hasLoadedOnce = useRef(false);
+  const isUserScrolling = useRef(false);
   
   // Animations
   const slideAnim = useRef(new Animated.Value(-300)).current;
@@ -194,7 +195,7 @@ export default function ChatDetailScreen() {
     }
   };
 
-  // ============ KEYBOARD HANDLERS FOR EXPO ============
+  // ============ KEYBOARD HANDLERS ============
   
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
@@ -203,8 +204,9 @@ export default function ChatDetailScreen() {
         setKeyboardVisible(true);
         setKeyboardHeight(event.endCoordinates.height);
         
+        // Only auto-scroll if user hasn't manually scrolled
         setTimeout(() => {
-          if (shouldAutoScroll && flatListRef.current) {
+          if (!isUserScrolling.current && shouldAutoScroll && flatListRef.current && messages.length > 0) {
             flatListRef.current.scrollToEnd({ animated: true });
           }
         }, 100);
@@ -223,7 +225,7 @@ export default function ChatDetailScreen() {
       keyboardDidShowListener.remove();
       keyboardDidHideListener.remove();
     };
-  }, [shouldAutoScroll]);
+  }, [shouldAutoScroll, messages.length]);
 
   // ============ CACHE HELPERS ============
   
@@ -272,6 +274,7 @@ export default function ChatDetailScreen() {
         setLoading(false);
         hasLoadedOnce.current = true;
         
+        // Scroll to bottom instantly without animation
         setTimeout(() => {
           if (flatListRef.current && isMounted.current) {
             flatListRef.current.scrollToEnd({ animated: false });
@@ -352,7 +355,7 @@ export default function ChatDetailScreen() {
     if (!user) return;
     
     try {
-      const msgs = await chatService.getMessages(chatId, 15, 0);
+      const msgs = await chatService.getMessages(chatId, 50, 0);
       
       if (!isMounted.current) return;
       
@@ -365,8 +368,9 @@ export default function ChatDetailScreen() {
         hasLoadedOnce.current = true;
       }
       
+      // Only auto-scroll if user hasn't manually scrolled
       setTimeout(() => {
-        if (flatListRef.current && isMounted.current && shouldAutoScroll) {
+        if (flatListRef.current && isMounted.current && !isUserScrolling.current && shouldAutoScroll) {
           flatListRef.current.scrollToEnd({ animated: true });
         }
       }, 200);
@@ -437,7 +441,8 @@ export default function ChatDetailScreen() {
           return newMessages;
         });
         
-        if (shouldAutoScroll) {
+        // Only auto-scroll if user is at bottom
+        if (!isUserScrolling.current && shouldAutoScroll) {
           setTimeout(() => {
             if (flatListRef.current && isMounted.current) {
               flatListRef.current.scrollToEnd({ animated: true });
@@ -523,7 +528,9 @@ export default function ChatDetailScreen() {
     });
     setMessage('');
     setShouldAutoScroll(true);
+    isUserScrolling.current = false;
     
+    // Smooth scroll to bottom after sending
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
     
     try {
@@ -580,8 +587,24 @@ export default function ChatDetailScreen() {
     }
   };
 
+  // Smooth scrolling handlers - user can scroll freely with fingers
+  const handleScrollBeginDrag = () => {
+    isUserScrolling.current = true;
+    setShouldAutoScroll(false);
+  };
+
+  const handleMomentumScrollEnd = (event: any) => {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    const isAtBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 50;
+    
+    if (isAtBottom) {
+      setShouldAutoScroll(true);
+      isUserScrolling.current = false;
+    }
+  };
+
   const scrollToBottom = () => {
-    if (flatListRef.current && messages.length > 0) {
+    if (flatListRef.current && messages.length > 0 && !isUserScrolling.current) {
       flatListRef.current.scrollToEnd({ animated: true });
     }
   };
@@ -664,34 +687,39 @@ export default function ChatDetailScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={currentTheme === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        
-        <View style={styles.headerInfo}>
-          <AvatarImage uri={otherUser?.profile_picture} size={40} style={styles.headerAvatar} />
-          <View style={styles.headerTextContainer}>
-            <Text style={[styles.headerName, { color: colors.text }]}>{getDisplayName()}</Text>
-            <Text style={[styles.headerStatus, { color: colors.textSecondary }]}>
-              {otherUserTyping ? 'Typing...' : (otherUser?.is_online ? 'Online' : 'Offline')}
-            </Text>
-          </View>
-        </View>
-        
-        <View style={styles.headerActions}>
-          <TouchableOpacity onPress={() => router.push(`/call/${chatId}?type=video`)} style={styles.headerIcon}>
-            <Ionicons name="videocam" size={22} color={colors.text} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push(`/call/${chatId}?type=voice`)} style={styles.headerIcon}>
-            <Ionicons name="call" size={20} color={colors.text} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => setMenuVisible(true)} style={styles.headerIcon}>
-            <Ionicons name="ellipsis-vertical" size={20} color={colors.text} />
-          </TouchableOpacity>
-        </View>
-      </View>
+{/* Header */}
+<View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+  <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+    <Ionicons name="arrow-back" size={24} color={colors.text} />
+  </TouchableOpacity>
+  
+  <View style={styles.headerInfo}>
+    <AvatarImage uri={otherUser?.profile_picture} size={40} style={styles.headerAvatar} />
+    <View style={styles.headerTextContainer}>
+      <Text style={[styles.headerName, { color: colors.text }]} numberOfLines={1}>
+        {otherUser?.full_name || otherUser?.mobile_number || 'Loading...'}
+      </Text>
+      <Text style={[styles.headerPhone, { color: colors.textSecondary }]} numberOfLines={1}>
+        {otherUser?.mobile_number || ''}
+      </Text>
+      <Text style={[styles.headerStatus, { color: colors.textSecondary }]}>
+        {otherUserTyping ? 'Typing...' : (otherUser?.is_online ? 'Online' : 'Offline')}
+      </Text>
+    </View>
+  </View>
+  
+  <View style={styles.headerActions}>
+    <TouchableOpacity onPress={() => router.push(`/call/${chatId}?type=video`)} style={styles.headerIcon}>
+      <Ionicons name="videocam" size={22} color={colors.text} />
+    </TouchableOpacity>
+    <TouchableOpacity onPress={() => router.push(`/call/${chatId}?type=voice`)} style={styles.headerIcon}>
+      <Ionicons name="call" size={20} color={colors.text} />
+    </TouchableOpacity>
+    <TouchableOpacity onPress={() => setMenuVisible(true)} style={styles.headerIcon}>
+      <Ionicons name="ellipsis-vertical" size={20} color={colors.text} />
+    </TouchableOpacity>
+  </View>
+</View>
 
       {/* Menu Modal */}
       <Modal transparent visible={menuVisible} onRequestClose={() => setMenuVisible(false)} animationType="fade">
@@ -721,7 +749,7 @@ export default function ChatDetailScreen() {
         </View>
       )}
 
-      {/* Messages List with dynamic padding for keyboard */}
+      {/* Messages List - Pure finger scrolling, no buttons */}
       <FlatList
         ref={flatListRef}
         data={messages}
@@ -729,26 +757,30 @@ export default function ChatDetailScreen() {
         renderItem={renderMessage}
         contentContainerStyle={[
           styles.messagesContainer,
-          { paddingBottom: keyboardVisible ? keyboardHeight + 20 : 20 }
+          { paddingBottom: keyboardVisible ? keyboardHeight + 80 : 280 }
         ]}
         onContentSizeChange={scrollToBottom}
         onLayout={scrollToBottom}
-        onScrollBeginDrag={() => setShouldAutoScroll(false)}
-        onMomentumScrollEnd={(event) => {
-          const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
-          const isAtBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 50;
-          setShouldAutoScroll(isAtBottom);
-        }}
+        onScrollBeginDrag={handleScrollBeginDrag}
+        onMomentumScrollEnd={handleMomentumScrollEnd}
         refreshing={refreshing}
         onRefresh={onRefresh}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
+        bounces={true}
+        overScrollMode="always"
+        scrollEventThrottle={16}
+        decelerationRate="normal"
+        initialNumToRender={20}
+        maxToRenderPerBatch={10}
+        windowSize={10}
+        removeClippedSubviews={true}
         ListEmptyComponent={() => (
           <View style={styles.emptyContainer}>
             <Ionicons name="chatbubble-ellipses-outline" size={60} color={colors.textSecondary} />
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No messages yet</Text>
-            <Text style={[styles.emptySubtext, { color: colors.textSecondary + '80' }]}>Send a message to start chatting!</Text>
+            <Text style={[styles.emptySubtext, { color: colors.textSecondary + '280' }]}>Send a message to start chatting!</Text>
           </View>
         )}
       />
@@ -756,7 +788,7 @@ export default function ChatDetailScreen() {
       {/* Input Area - Pushed above keyboard */}
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 120}
         style={styles.keyboardAvoidingView}
       >
         <View style={[styles.inputContainer, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
@@ -817,7 +849,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    paddingTop: Platform.OS === 'ios' ? 50 : (StatusBar.currentHeight || 0) + 15,
+    paddingTop: Platform.OS === 'ios' ? 50 : (StatusBar.currentHeight || 0) + 25,
     borderBottomWidth: 0.5,
     zIndex: 10,
   },
@@ -963,7 +995,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   
-  // Input Area - Pushed above keyboard
+  // Input Area
   keyboardAvoidingView: {
     position: 'absolute',
     bottom: 76,
